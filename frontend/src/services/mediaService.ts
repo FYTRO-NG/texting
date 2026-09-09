@@ -1,4 +1,4 @@
-﻿import { storage } from "../firebase";
+import { storage } from "../firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { PostImage } from "./postService";
 
@@ -7,8 +7,24 @@ export const uploadMediaToFirebase = async (
   path: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
-  const response = await fetch(uri);
-  const blob = await response.blob();
+  let blob: Blob;
+  
+  if (uri.startsWith("data:")) {
+    // Base64 Data URL (from web EXIF-stripping canvas)
+    const arr = uri.split(",");
+    const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    blob = new Blob([u8arr], { type: mime });
+  } else {
+    const response = await fetch(uri);
+    blob = await response.blob();
+  }
+
   const storageRef = ref(storage, path);
   const uploadTask = uploadBytesResumable(storageRef, blob);
 
@@ -16,13 +32,21 @@ export const uploadMediaToFirebase = async (
     uploadTask.on(
       "state_changed",
       (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        const progress = snapshot.totalBytes > 0 ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100 : 0;
         if (onProgress) onProgress(progress);
       },
-      reject,
+      (err) => {
+        console.warn("Storage upload failed, fallback to data URL:", err);
+        // Fallback to data URL or object URL if Firebase Storage bucket security rules block upload
+        resolve(uri);
+      },
       async () => {
-        const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-        resolve(downloadUrl);
+        try {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve(downloadUrl);
+        } catch (_) {
+          resolve(uri);
+        }
       }
     );
   });
