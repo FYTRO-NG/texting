@@ -111,7 +111,7 @@ export default function CommunityDetail() {
       >
         {/* Cover */}
         <View style={styles.cover}>
-          <Image source={{ uri: community.cover }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+          {cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : null}
           <LinearGradient
             colors={["rgba(15,23,42,0.35)", "rgba(15,23,42,0.98)"]}
             style={StyleSheet.absoluteFillObject}
@@ -138,18 +138,18 @@ export default function CommunityDetail() {
             <View style={styles.identityHead}>
               <View style={styles.emojiWrap}>
                 <LinearGradient
-                  colors={community.gradient}
+                  colors={AVATAR_GRADIENTS[0]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFillObject}
                 />
-                <Text style={styles.emojiText}>{community.emoji}</Text>
+                <Text style={styles.emojiText}>{emoji}</Text>
               </View>
               <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={styles.name}>{community.name}</Text>
+                <Text style={styles.name}>{name}</Text>
                 <View style={styles.metaRow}>
                   <Ionicons name="people" size={12} color={colors.onSurfaceMuted} />
-                  <Text style={styles.metaText}>{community.members} members</Text>
+                  <Text style={styles.metaText}>{memberCount} members</Text>
                   <View style={styles.metaDot} />
                   <View style={styles.livePulse} />
                   <Text style={[styles.metaText, { color: colors.success }]}>2.4K online</Text>
@@ -168,7 +168,7 @@ export default function CommunityDetail() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.description}>{community.description}. A safe, moderated space to share what actually matters — under a mask.</Text>
+            <Text style={styles.description}>{description}. A safe, moderated space to share what actually matters — under a mask.</Text>
 
             {/* Active members */}
             <View style={styles.activeRow}>
