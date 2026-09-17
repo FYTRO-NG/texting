@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.privatevoices.lu9ynd"
+      "bundleIdentifier": "com.privatevoices"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.privatevoices.lu9ynd"
+      "package": "com.privatevoices",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",

@@ -1,0 +1,39 @@
+﻿{
+  "project_info": {
+    "project_number": "907006277416",
+    "project_id": "private-vioces",
+    "storage_bucket": "private-vioces.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:907006277416:android:8e0d36855bb479567e021d",
+        "android_client_info": {
+          "package_name": "com.privatevoices"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "907006277416-324t6soc1a47u2gvevco4pf4lkitks3i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSJPaH2tYQKlGS1nBrqSrv8_p4x5sqz9c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "907006277416-324t6soc1a47u2gvevco4pf4lkitks3i.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

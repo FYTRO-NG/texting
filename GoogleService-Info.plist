@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>907006277416-g8ivpcvf2u5mi7q7qjib9ag9nh8o6gh8.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.907006277416-g8ivpcvf2u5mi7q7qjib9ag9nh8o6gh8</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAHGMj_v9-Mg534zyj4MA1SmyAlBWFirAU</string>
+	<key>GCM_SENDER_ID</key>
+	<string>907006277416</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.privatevoices</string>
+	<key>PROJECT_ID</key>
+	<string>private-vioces</string>
+	<key>STORAGE_BUCKET</key>
+	<string>private-vioces.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:907006277416:ios:b0bd9d819c6d92987e021d</string>
+</dict>
+</plist>
