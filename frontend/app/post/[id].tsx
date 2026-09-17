@@ -20,6 +20,7 @@ import Avatar from "@/src/components/Avatar";
 import { AVATAR_GRADIENTS, Comment, Post } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 import { getPostById, subscribeToComments, addCommentToFirestore } from "@/src/services/postService";
+import { getUserProfile, ensureAnonymousAuth } from "@/src/services/authService";
 import { auth } from "@/src/firebase";
 
 const SORT_TABS = ["Top", "New", "Following"];
@@ -114,13 +115,26 @@ export default function PostDetail() {
   }, [id]);
 
 
+  const [userHandle, setUserHandle] = useState<string>("Voice");
+
+  useEffect(() => {
+    const currentUser = auth?.currentUser;
+    if (currentUser) {
+      getUserProfile(currentUser.uid).then((prof) => {
+        if (prof?.username) setUserHandle(prof.username);
+        else if (currentUser.displayName) setUserHandle(currentUser.displayName);
+      });
+    }
+  }, []);
+
   const onSendReply = async () => {
     if (!reply.trim()) return;
     const commentText = reply.trim();
     setReply("");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const handle = auth?.currentUser?.displayName || auth?.currentUser?.email?.split("@")[0] || "Voice";
+    const currentUser = auth?.currentUser || (await ensureAnonymousAuth().catch(() => null));
+    const handle = userHandle !== "Voice" ? userHandle : (currentUser?.displayName || currentUser?.email?.split("@")[0] || "Voice");
 
     if (id) {
       await addCommentToFirestore(id as string, {

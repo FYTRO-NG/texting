@@ -1,4 +1,4 @@
-﻿import { db, functions } from "../firebase";
+import { db, functions } from "../firebase";
 import {
   collection,
   doc,
@@ -44,7 +44,6 @@ const _createCommunity = httpsCallable<any, { success: boolean; communityId: str
 const _joinCommunity = httpsCallable<{ communityId: string }, { success: boolean; status: string }>(functions, "joinCommunity");
 const _leaveCommunity = httpsCallable<{ communityId: string }, { success: boolean; status: string }>(functions, "leaveCommunity");
 
-// ─── Service Methods ───
 export const createCommunityInFirestore = async (data: {
   name: string;
   slug: string;
@@ -56,9 +55,37 @@ export const createCommunityInFirestore = async (data: {
   allowAnonymousPosts: boolean;
   avatarUrl?: string;
   coverUrl?: string;
-}) => {
-  const result = await _createCommunity(data);
-  return result.data;
+}): Promise<{ success: boolean; communityId: string }> => {
+  try {
+    const result = await _createCommunity(data);
+    if (result.data && result.data.success) return result.data;
+  } catch (funcErr) {
+    console.warn("Cloud Function createCommunity unavailable, falling back to direct Firestore:", funcErr);
+  }
+
+  // Fallback: Direct Firestore creation
+  const communityId = data.slug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, "");
+  const commRef = doc(db, "communities", communityId);
+  const ownerId = auth?.currentUser?.uid || "anon-user";
+
+  await setDoc(commRef, {
+    name: data.name,
+    slug: communityId,
+    description: data.description,
+    category: data.category,
+    visibility: data.visibility,
+    requireApproval: data.requireApproval,
+    allowAnonymousPosts: data.allowAnonymousPosts,
+    rules: data.rules,
+    avatarUrl: data.avatarUrl || null,
+    coverUrl: data.coverUrl || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
+    ownerId,
+    memberCount: 1,
+    postCount: 0,
+    createdAt: serverTimestamp(),
+  });
+
+  return { success: true, communityId };
 };
 
 export const joinCommunityCallable = async (communityId: string) => {

@@ -14,7 +14,7 @@ import { uploadPostImages } from "@/src/services/mediaService";
 import { evaluateAIModeration } from "@/src/services/aiModerationService";
 import { checkRateLimit } from "@/src/services/safetyService";
 import { subscribeToCommunities } from "@/src/services/communityService";
-import { getUserProfile, UserProfile } from "@/src/services/authService";
+import { getUserProfile, UserProfile, ensureAnonymousAuth } from "@/src/services/authService";
 import { auth } from "@/src/firebase";
 import { pickImagesFromGallery, takePictureWithCamera } from "@/src/utils/imagePicker";
 
@@ -121,7 +121,8 @@ export default function Create() {
       if (modResult.decision === "BLOCK") { setError("This post can't be published because it doesn't meet Private Voices' Community Guidelines."); return; }
     }
     setSubmitting(true); setUploadProgress(0);
-    const userId = (auth && auth.currentUser && auth.currentUser.uid) || "anon-user";
+    const currentUser = auth?.currentUser || (await ensureAnonymousAuth().catch(() => null));
+    const userId = currentUser?.uid || "anon-user";
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       let uploadedImages = [];
