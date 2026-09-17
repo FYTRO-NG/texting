@@ -60,7 +60,8 @@ export default function PostCard({ post }: Props) {
   };
 
   const onShare = async () => {
-    const postUrl = `https://privatevoices.vercel.app/post/${post.id}`;
+    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app";
+    const postUrl = `${baseUrl}/post/${post.id}`;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.share) {

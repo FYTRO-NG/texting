@@ -32,7 +32,8 @@ const SHARE_CHANNELS = [
 export default function InviteFriendsModal({ visible, onClose }: Props) {
   const [copied, setCopied] = useState(false);
   const handle = auth.currentUser?.displayName || auth.currentUser?.email?.split("@")[0] || "ShadowFox_42";
-  const inviteUrl = `https://privatevoices.vercel.app/w/@${handle}`;
+  const baseUrl = process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app";
+  const inviteUrl = `${baseUrl}/w/@${handle}`;
 
   const handleShare = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

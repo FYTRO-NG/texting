@@ -23,7 +23,7 @@ import { subscribeToWhispers } from "@/src/services/whisperService";
 import { useSecurity } from "@/src/contexts/SecurityContext";
 import { authenticateWithBiometrics } from "@/src/services/biometricService";
 
-const BASE_URL = "https://privatevoices.vercel.app/w";
+const BASE_URL = `${process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app"}/w`;
 
 const SHARE_TARGETS = [
   { key: "whatsapp", label: "WhatsApp", icon: "logo-whatsapp", color: "#25D366" },
