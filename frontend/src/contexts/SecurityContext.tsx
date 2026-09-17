@@ -129,12 +129,14 @@ export function SecurityProvider({ children }: { children: React.ReactNode }) {
           const elapsed = Date.now() - backgroundedAtRef.current;
           const threshold = AUTO_LOCK_TIMEOUT_MS[currentSettings.autoLockTimeout];
 
-          const shouldLock =
-            threshold === null || // immediate / on-background already locked
-            elapsed >= threshold;
+          if (currentSettings.autoLockTimeout !== "never") {
+            const shouldLock =
+              threshold === null || // immediate / on-background already locked
+              elapsed >= threshold;
 
-          if (shouldLock && !unlockingRef.current) {
-            setIsLocked(true);
+            if (shouldLock && !unlockingRef.current) {
+              setIsLocked(true);
+            }
           }
         }
         backgroundedAtRef.current = null;

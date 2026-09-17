@@ -65,7 +65,7 @@ export default function Settings() {
   const { settings, biometricInfo, updateSettings } = useSecurity();
 
   const handleSelectTimeout = () => {
-    const options: AutoLockTimeout[] = ["immediate", "1min", "5min", "15min", "on-background"];
+    const options: AutoLockTimeout[] = ["immediate", "1min", "5min", "15min", "on-background", "never"];
     Alert.alert(
       "Auto-Lock Timeout",
       "Choose when Private Voices should lock automatically after leaving the app.",

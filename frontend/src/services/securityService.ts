@@ -16,7 +16,8 @@ export type AutoLockTimeout =
   | "1min"        // Lock 1 minute after backgrounding
   | "5min"        // Lock 5 minutes after backgrounding
   | "15min"       // Lock 15 minutes after backgrounding
-  | "on-background"; // Lock only when app is fully backgrounded (not just inactive)
+  | "on-background" // Lock only when app is fully backgrounded (not just inactive)
+  | "never";      // Never auto-lock on timeout
 
 export type SecuritySettings = {
   /** Whether biometric lock is enabled */
@@ -46,15 +47,17 @@ export const AUTO_LOCK_TIMEOUT_LABELS: Record<AutoLockTimeout, string> = {
   "5min": "After 5 minutes",
   "15min": "After 15 minutes",
   "on-background": "When switching apps",
+  never: "Never",
 };
 
-/** Timeout in milliseconds — null means lock immediately */
+/** Timeout in milliseconds — null means lock immediately, Infinity means never */
 export const AUTO_LOCK_TIMEOUT_MS: Record<AutoLockTimeout, number | null> = {
   immediate: null,
   "1min": 60_000,
   "5min": 300_000,
   "15min": 900_000,
   "on-background": null,
+  never: Infinity,
 };
 
 // ─── Public API ───────────────────────────────────────────────────────────────
