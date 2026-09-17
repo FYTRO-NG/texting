@@ -1,4 +1,4 @@
-﻿import { db } from "../firebase";
+import { db } from "../firebase";
 import {
   collection,
   addDoc,
@@ -61,6 +61,7 @@ function mapDocToPost(docSnap: any, saved = false): Post {
     likes: data.likes || 0,
     comments: data.commentsCount || 0,
     reposts: data.reposts || 0,
+    viewCount: data.viewCount || 0,
     liked: false,
     saved,
   };
@@ -143,4 +144,69 @@ export const subscribeToPostsByCommunity = (communityName: string, callback: (po
 export const subscribeToSavedPosts = (userId: string, callback: (posts: Post[]) => void) => {
   const q = query(collection(db, "posts"), where("savedBy", "array-contains", userId), orderBy("createdAt", "desc"), limit(30));
   return onSnapshot(q, (s) => callback(s.docs.map((d) => mapDocToPost(d, true))), () => callback([]));
+};
+
+/** Increment viewCount once per post open (fire-and-forget, no throw). */
+export const incrementViewCount = async (postId: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, "posts", postId), { viewCount: increment(1) });
+  } catch (_) {
+    // non-critical — ignore errors silently
+  }
+};
+
+export type PostAnalytics = {
+  postId: string;
+  text: string;
+  viewCount: number;
+  likes: number;
+  comments: number;
+  reposts: number;
+  saves: number;
+  createdAt: Date | null;
+};
+
+/** Live subscription returning analytics metrics for a single post. */
+export const subscribeToPostAnalytics = (
+  postId: string,
+  callback: (data: PostAnalytics | null) => void
+) => {
+  return onSnapshot(doc(db, "posts", postId), (snap) => {
+    if (!snap.exists()) { callback(null); return; }
+    const d = snap.data();
+    callback({
+      postId: snap.id,
+      text: d.text || "",
+      viewCount: d.viewCount || 0,
+      likes: d.likes || 0,
+      comments: d.commentsCount || 0,
+      reposts: d.reposts || 0,
+      saves: (d.savedBy?.length) || 0,
+      createdAt: d.createdAt?.toDate?.() ?? null,
+    });
+  }, () => callback(null));
+};
+
+/** Live subscription returning aggregated analytics across all of a user's posts. */
+export const subscribeToUserPostsAnalytics = (
+  userId: string,
+  callback: (posts: PostAnalytics[]) => void
+) => {
+  const q = query(collection(db, "posts"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(50));
+  return onSnapshot(q, (s) => {
+    const results: PostAnalytics[] = s.docs.map((snap) => {
+      const d = snap.data();
+      return {
+        postId: snap.id,
+        text: d.text || "",
+        viewCount: d.viewCount || 0,
+        likes: d.likes || 0,
+        comments: d.commentsCount || 0,
+        reposts: d.reposts || 0,
+        saves: (d.savedBy?.length) || 0,
+        createdAt: d.createdAt?.toDate?.() ?? null,
+      };
+    });
+    callback(results);
+  }, () => callback([]));
 };

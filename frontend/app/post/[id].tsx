@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -19,7 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Avatar from "@/src/components/Avatar";
 import { AVATAR_GRADIENTS, Comment, Post } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
-import { getPostById, subscribeToComments, addCommentToFirestore } from "@/src/services/postService";
+import { getPostById, subscribeToComments, addCommentToFirestore, incrementViewCount } from "@/src/services/postService";
 import { getUserProfile, ensureAnonymousAuth } from "@/src/services/authService";
 import { auth } from "@/src/firebase";
 
@@ -108,6 +108,8 @@ export default function PostDetail() {
     getPostById(id as string).then((data) => {
       if (data) setPost(data);
     });
+    // Fire-and-forget: increment view count each time this post is opened
+    incrementViewCount(id as string);
     const unsubscribe = subscribeToComments(id as string, (liveComments) => {
       setCommentsList(liveComments as any);
     });

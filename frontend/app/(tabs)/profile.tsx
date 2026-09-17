@@ -84,13 +84,22 @@ export default function Profile() {
       {/* ── Top bar ── */}
       <SafeAreaView edges={["top"]} style={styles.topBar}>
         <Text style={styles.topBarTitle}>My Profile</Text>
-        <TouchableOpacity
-          onPress={() => router.push("/settings")}
-          style={styles.settingsBtn}
-          testID="profile-settings-btn"
-        >
-          <Ionicons name="settings-outline" size={20} color={colors.onSurface} />
-        </TouchableOpacity>
+        <View style={styles.topBarActions}>
+          <TouchableOpacity
+            onPress={() => router.push("/post-analytics" as any)}
+            style={styles.iconBtn}
+            testID="profile-analytics-btn"
+          >
+            <Ionicons name="bar-chart-outline" size={20} color={colors.brand} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push("/settings")}
+            style={styles.iconBtn}
+            testID="profile-settings-btn"
+          >
+            <Ionicons name="settings-outline" size={20} color={colors.onSurface} />
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
 
       <ScrollView
@@ -231,7 +240,36 @@ export default function Profile() {
         <View style={styles.contentArea}>
           {tab === 0 &&
             (recentPosts.length > 0 ? (
-              recentPosts.map((p) => <PostCard key={p.id} post={p} />)
+              <>
+                {/* Analytics banner */}
+                <TouchableOpacity
+                  style={styles.analyticsBanner}
+                  activeOpacity={0.82}
+                  onPress={() => router.push("/post-analytics" as any)}
+                >
+                  <Ionicons name="bar-chart-outline" size={16} color={colors.brand} />
+                  <Text style={styles.analyticsBannerText}>View Post Insights</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+                </TouchableOpacity>
+                {recentPosts.map((p) => (
+                  <View key={p.id} style={styles.postWithAnalytics}>
+                    <PostCard post={p} />
+                    <TouchableOpacity
+                      style={styles.analyticsRowBtn}
+                      onPress={() => router.push("/post-analytics" as any)}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="eye-outline" size={12} color={colors.onSurfaceDim} />
+                      <Text style={styles.analyticsRowText}>
+                        {(p.viewCount ?? 0).toLocaleString()} views
+                      </Text>
+                      <Text style={styles.analyticsRowDot}>·</Text>
+                      <Ionicons name="stats-chart-outline" size={12} color={colors.brand} />
+                      <Text style={styles.analyticsRowInsights}>Insights</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </>
             ) : (
               <EmptyState
                 icon="chatbubble-ellipses-outline"
@@ -339,7 +377,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(255,255,255,0.07)",
   },
   topBarTitle: { ...font.h3, fontSize: 17 },
-  settingsBtn: {
+  topBarActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  iconBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -612,4 +651,36 @@ const styles = StyleSheet.create({
     marginTop: 6,
     maxWidth: 220,
   },
+
+  /* Analytics */
+  analyticsBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: "rgba(6,182,212,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(6,182,212,0.30)",
+    marginBottom: spacing.sm,
+  },
+  analyticsBannerText: {
+    ...font.caption,
+    color: colors.brand,
+    fontWeight: "700",
+    flex: 1,
+  },
+  postWithAnalytics: { marginBottom: 4 },
+  analyticsRowBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    marginBottom: spacing.sm,
+  },
+  analyticsRowText: { ...font.small, color: colors.onSurfaceDim },
+  analyticsRowDot: { ...font.small, color: colors.onSurfaceDim },
+  analyticsRowInsights: { ...font.small, color: colors.brand, fontWeight: "700" },
 });

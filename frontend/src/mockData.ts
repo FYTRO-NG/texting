@@ -1,4 +1,4 @@
-﻿import { colors, gradients } from "./theme";
+import { colors, gradients } from "./theme";
 
 export type Post = {
   id: string;
@@ -15,6 +15,7 @@ export type Post = {
   likes: number;
   comments: number;
   reposts: number;
+  viewCount?: number;
   liked?: boolean;
   saved?: boolean;
 };
