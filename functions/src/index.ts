@@ -32,6 +32,13 @@ export {
   leaveCommunity,
 } from "./community";
 
+// Re-export explore recommendation functions (defined in recommendation/index.ts)
+export {
+  onPostCreatedExtractHashtags,
+  refreshExploreFeedBundle,
+  getPersonalizedExploreFeed,
+} from "./recommendation";
+
 
 // ─── onUserCreate ─────────────────────────────────────────────────────────────
 // Triggered every time a new Firebase Auth user is created.

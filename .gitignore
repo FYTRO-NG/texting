@@ -29,6 +29,7 @@ next-env.d.ts
 /build
 dist/
 dist
+functions/lib/
 
 # Environment files (comprehensive coverage)
 

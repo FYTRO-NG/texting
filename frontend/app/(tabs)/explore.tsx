@@ -15,10 +15,17 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Avatar from "@/src/components/Avatar";
+import PostCard from "@/src/components/PostCard";
 import { colors, font, radii, spacing } from "@/src/theme";
 import { subscribeToCommunities } from "@/src/services/communityService";
 import { subscribeToSuggestedCreators, PublicUserProfile } from "@/src/services/userService";
 import { subscribeToPosts } from "@/src/services/postService";
+import {
+  getExploreFeed,
+  subscribeToTrendingHashtags,
+  TrendingHashtag,
+  getPostsByHashtag,
+} from "@/src/services/exploreRecommendationService";
 import { Community, Post } from "@/src/mockData";
 
 const TABS = ["🔥 Trending", "For You", "💬 Popular Voices", "Communities"];
@@ -30,22 +37,53 @@ export default function Explore() {
   const [query, setQuery] = useState("");
   const [liveCommunities, setLiveCommunities] = useState<Community[]>([]);
   const [livePosts, setLivePosts] = useState<Post[]>([]);
+  const [recommendedPosts, setRecommendedPosts] = useState<Post[]>([]);
   const [liveCreators, setLiveCreators] = useState<PublicUserProfile[]>([]);
+  const [indexedHashtags, setIndexedHashtags] = useState<TrendingHashtag[]>([]);
+  const [activeHashtagFilter, setActiveHashtagFilter] = useState<string | null>(null);
 
   React.useEffect(() => {
     const unsubComm = subscribeToCommunities(setLiveCommunities);
     const unsubPosts = subscribeToPosts(setLivePosts);
     const unsubCreators = subscribeToSuggestedCreators(setLiveCreators);
+    const unsubTags = subscribeToTrendingHashtags(setIndexedHashtags);
+
+    // Fetch pre-computed explore recommendation bundle
+    getExploreFeed(40).then((res) => {
+      if (res.posts && res.posts.length > 0) {
+        setRecommendedPosts(res.posts);
+      }
+    });
 
     return () => {
       unsubComm();
       unsubPosts();
       unsubCreators();
+      unsubTags();
     };
   }, []);
 
-  // Dynamically extract hashtags from live posts
+  // When clicking a hashtag, fetch dedicated feed
+  React.useEffect(() => {
+    if (activeHashtagFilter) {
+      getPostsByHashtag(activeHashtagFilter, 30).then((posts) => {
+        if (posts.length > 0) {
+          setRecommendedPosts(posts);
+        }
+      });
+    }
+  }, [activeHashtagFilter]);
+
+  // Merge indexed hashtags with live post tags
   const tagsMap = React.useMemo(() => {
+    if (indexedHashtags.length > 0) {
+      return indexedHashtags.map((h) => ({
+        tag: h.tag.startsWith("#") ? h.tag : `#${h.tag}`,
+        posts: `${h.postCount}`,
+        momentum: h.momentumScore || 1.0,
+      }));
+    }
+
     const counts: Record<string, number> = {};
     livePosts.forEach((p) => {
       const hashtags = p.text.match(/#[a-zA-Z0-9_]+/g);
@@ -56,9 +94,9 @@ export default function Explore() {
       }
     });
     return Object.entries(counts)
-      .map(([tag, count]) => ({ tag, posts: `${count}` }))
+      .map(([tag, count]) => ({ tag, posts: `${count}`, momentum: 1.0 }))
       .sort((a, b) => parseInt(b.posts) - parseInt(a.posts));
-  }, [livePosts]);
+  }, [indexedHashtags, livePosts]);
 
   const filteredTags = tagsMap.filter(
     (t) => !query || t.tag.toLowerCase().includes(query.toLowerCase())
@@ -166,13 +204,19 @@ export default function Explore() {
           </View>
           <View style={styles.tagsGrid}>
             {filteredTags.map((t, i) => (
-              <TouchableOpacity key={t.tag} style={styles.tagCard} activeOpacity={0.8} testID={`trend-tag-${i}`}>
+              <TouchableOpacity
+                key={t.tag}
+                style={[styles.tagCard, activeHashtagFilter === t.tag && { borderColor: colors.brand, backgroundColor: colors.brandSoft }]}
+                onPress={() => setActiveHashtagFilter((prev) => (prev === t.tag ? null : t.tag))}
+                activeOpacity={0.8}
+                testID={`trend-tag-${i}`}
+              >
                 <View style={styles.tagRank}>
                   <Text style={styles.tagRankText}>{i + 1}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.tagName}>{t.tag}</Text>
-                  <Text style={styles.tagCount}>{t.posts} posts</Text>
+                  <Text style={styles.tagCount}>{t.posts} posts {t.momentum > 1.2 ? "• 🔥 Spiking" : ""}</Text>
                 </View>
                 <Ionicons name="trending-up" size={16} color={colors.success} />
               </TouchableOpacity>
@@ -240,6 +284,23 @@ export default function Explore() {
                   <Text style={styles.commMembers}>{c.members} members</Text>
                 </View>
               </TouchableOpacity>
+            ))}
+          </View>
+        {/* Explore Recommendation Feed */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              {activeHashtagFilter ? `Posts in ${activeHashtagFilter}` : "Recommended for you"}
+            </Text>
+            {activeHashtagFilter && (
+              <TouchableOpacity onPress={() => setActiveHashtagFilter(null)}>
+                <Text style={styles.sectionLink}>Clear tag</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={{ paddingHorizontal: spacing.lg, gap: 14 }}>
+            {(recommendedPosts.length > 0 ? recommendedPosts : livePosts).slice(0, 15).map((post) => (
+              <PostCard key={`rec-${post.id}`} post={post} />
             ))}
           </View>
         </View>

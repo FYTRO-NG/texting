@@ -136,6 +136,24 @@ service cloud.firestore {
       allow read, update: if isAuthenticated();
     }
 
+    // ─── Hashtags & Trending Index ──────────────────────────────────────────
+    match /hashtags/{hashtag} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Server-managed via Cloud Functions
+    }
+
+    // ─── Explore Recommendation Bundles ──────────────────────────────────────
+    match /explore_bundles/{bundleId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Pre-computed and updated only by backend pipeline
+    }
+
+    // ─── System Configurations (Admin Tunable) ───────────────────────────────
+    match /system_configs/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin managed only
+    }
+
     // ─── Default deny ─────────────────────────────────────────────────────────
 
     match /{document=**} {
