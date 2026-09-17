@@ -12,13 +12,12 @@ import { getFunctions } from "firebase/functions";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBEDGgppNSjEDkgHOu1LP8bZbMzCde2mak",
-  authDomain: "private-vioces.firebaseapp.com",
-  projectId: "private-vioces",
-  storageBucket: "private-vioces.firebasestorage.app",
-  messagingSenderId: "907006277416",
-  appId: "1:907006277416:web:525a4e2ad124fd597e021d",
-  measurementId: "G-M1253VCTC5"
+  apiKey:            process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain:        process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId:         process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket:     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase App (prevent duplicate init)
@@ -26,7 +25,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Services
 export const auth = getAuth(app);
-export const db = getFirestore(app, "privatevoices");
+export const db = getFirestore(app, process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "privatevoices");
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
 
