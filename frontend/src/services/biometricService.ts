@@ -117,7 +117,10 @@ export async function authenticateWithBiometrics(
     });
 
     // result.success is the ONLY data we use — the OS boolean outcome.
-    return { success: result.success, error: result.error };
+    return {
+      success: result.success,
+      error: !result.success && "error" in result ? (result as any).error : undefined,
+    };
   } catch (err: any) {
     return { success: false, error: err?.message ?? "Authentication failed" };
   }
