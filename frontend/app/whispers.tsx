@@ -20,6 +20,8 @@ import { Whisper } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 import { auth } from "@/src/firebase";
 import { subscribeToWhispers } from "@/src/services/whisperService";
+import { useSecurity } from "@/src/contexts/SecurityContext";
+import { authenticateWithBiometrics } from "@/src/services/biometricService";
 
 const BASE_URL = "https://privatevoices.vercel.app/w";
 
@@ -79,6 +81,34 @@ export default function Whispers() {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [messages, setMessages] = useState<Whisper[]>([]);
+  const { settings, biometricInfo } = useSecurity();
+  const [inboxUnlocked, setInboxUnlocked] = useState(!settings.protectInbox);
+
+  useEffect(() => {
+    if (!settings.protectInbox || Platform.OS === "web") {
+      setInboxUnlocked(true);
+      return;
+    }
+
+    if (!biometricInfo.available) {
+      setInboxUnlocked(true);
+      return;
+    }
+
+    let isMounted = true;
+    authenticateWithBiometrics("Verify identity to open Anonymous Inbox").then((res) => {
+      if (!isMounted) return;
+      if (res.success) {
+        setInboxUnlocked(true);
+      } else {
+        router.back();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [settings.protectInbox, biometricInfo.available]);
 
   // ── Real user handle ──────────────────────────────────────
   const user = auth?.currentUser;
@@ -138,6 +168,15 @@ export default function Whispers() {
     // Fallback: copy to clipboard
     await onCopy();
   };
+
+  if (!inboxUnlocked) {
+    return (
+      <View style={[styles.container, { alignItems: "center", justifyContent: "center" }]}>
+        <LinearGradient colors={["#0F172A", "#0B1220"]} style={StyleSheet.absoluteFillObject} />
+        <Ionicons name="lock-closed" size={32} color={colors.brand} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container} testID="whispers-screen">

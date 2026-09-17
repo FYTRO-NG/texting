@@ -9,6 +9,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { DesktopShell } from "@/src/components/DesktopShell";
 import { useAuthState } from "@/src/services/authService";
+import { SecurityProvider, useSecurity } from "@/src/contexts/SecurityContext";
+import LockScreen from "@/src/components/LockScreen";
+import PrivacyScreen from "@/src/components/PrivacyScreen";
 
 // Disable logbox errors so users can see the app
 LogBox.ignoreAllLogs(true);
@@ -76,6 +79,27 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+
+function RootLayoutContent() {
+  const { isLocked } = useSecurity();
+
+  return (
+    <>
+      <DesktopShell>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "#0F172A" },
+            animation: "fade",
+          }}
+        />
+      </DesktopShell>
+      {isLocked && <LockScreen />}
+      <PrivacyScreen />
+    </>
+  );
+}
+
 export default function RootLayout() {
   useIconFonts();
   const { user, loading: authLoading } = useAuthState();
@@ -106,15 +130,9 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#0F172A" }}>
         <SafeAreaProvider style={{ flex: 1, backgroundColor: "#0F172A" }}>
           <StatusBar style="light" />
-          <DesktopShell>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: "#0F172A" },
-                animation: "fade",
-              }}
-            />
-          </DesktopShell>
+          <SecurityProvider>
+            <RootLayoutContent />
+          </SecurityProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

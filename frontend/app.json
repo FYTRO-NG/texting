@@ -36,6 +36,12 @@
           "resizeMode": "contain",
           "backgroundColor": "#0F172A"
         }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Private Voices to use Face ID to protect your private messages and account."
+        }
       ]
     ],
     "experiments": {

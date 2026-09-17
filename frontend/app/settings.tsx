@@ -12,6 +12,11 @@ import InviteFriendsModal from "@/src/components/InviteFriendsModal";
 import ReportBugModal from "@/src/components/ReportBugModal";
 import { logout, getUserProfile, UserProfile } from "@/src/services/authService";
 import { auth } from "@/src/firebase";
+import { useSecurity } from "@/src/contexts/SecurityContext";
+import {
+  AUTO_LOCK_TIMEOUT_LABELS,
+  AutoLockTimeout,
+} from "@/src/services/securityService";
 
 type Row = {
   icon: string;
@@ -57,7 +62,68 @@ export default function Settings() {
     }
   };
 
+  const { settings, biometricInfo, updateSettings } = useSecurity();
+
+  const handleSelectTimeout = () => {
+    const options: AutoLockTimeout[] = ["immediate", "1min", "5min", "15min", "on-background"];
+    Alert.alert(
+      "Auto-Lock Timeout",
+      "Choose when Private Voices should lock automatically after leaving the app.",
+      [
+        ...options.map((opt) => ({
+          text: AUTO_LOCK_TIMEOUT_LABELS[opt] + (settings.autoLockTimeout === opt ? " ✓" : ""),
+          onPress: () => updateSettings({ autoLockTimeout: opt }),
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ]
+    );
+  };
+
   const sections: { title: string; rows: (Row & { onToggle?: (v: boolean) => void; toggleValue?: boolean })[] }[] = [
+    ...(biometricInfo.available && Platform.OS !== "web"
+      ? [
+          {
+            title: "Security & Biometrics",
+            rows: [
+              {
+                icon: biometricInfo.typeName === "Face ID" ? "scan-outline" : "finger-print-outline",
+                label: `${biometricInfo.typeName} Lock`,
+                hint: `Require ${biometricInfo.typeName} to open Private Voices`,
+                toggle: true,
+                toggleValue: settings.biometricLockEnabled,
+                onToggle: (v: boolean) => updateSettings({ biometricLockEnabled: v }),
+              },
+              ...(settings.biometricLockEnabled
+                ? [
+                    {
+                      icon: "time-outline",
+                      label: "Auto-lock",
+                      hint: AUTO_LOCK_TIMEOUT_LABELS[settings.autoLockTimeout],
+                      chevron: true,
+                      onPress: handleSelectTimeout,
+                    },
+                  ]
+                : []),
+              {
+                icon: "shield-checkmark-outline",
+                label: "Protect Anonymous Inbox",
+                hint: `Require ${biometricInfo.typeName} before accessing Whispers`,
+                toggle: true,
+                toggleValue: settings.protectInbox,
+                onToggle: (v: boolean) => updateSettings({ protectInbox: v }),
+              },
+              {
+                icon: "eye-off-outline",
+                label: "Privacy Screen in App Switcher",
+                hint: "Blur screen when switching between apps",
+                toggle: true,
+                toggleValue: settings.privacyScreenEnabled,
+                onToggle: (v: boolean) => updateSettings({ privacyScreenEnabled: v }),
+              },
+            ],
+          },
+        ]
+      : []),
     {
       title: "Privacy",
       rows: [
