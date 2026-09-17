@@ -166,8 +166,8 @@ export default function Create() {
           <Animated.View style={[styles.progressBar,{width:progressAnim.interpolate({inputRange:[0,100],outputRange:["0%","100%"]})}]} />
         </View>
       )}
-      <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==="ios"?"padding":undefined} keyboardVerticalOffset={0}>
-        <ScrollView contentContainerStyle={{paddingBottom:140+insets.bottom}} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==="ios"?"padding":"height"} keyboardVerticalOffset={0}>
+        <ScrollView contentContainerStyle={{paddingBottom:spacing.md}} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {error ? (
             <View style={styles.errorBox} accessibilityRole="alert">
               <Ionicons name="alert-circle" size={16} color={colors.error} />
@@ -273,8 +273,7 @@ export default function Create() {
             </View>
           )}
         </ScrollView>
-        <View style={[styles.toolbar,{paddingBottom:8+insets.bottom}]}>
-          <LinearGradient colors={["rgba(15,23,42,0)","rgba(15,23,42,0.98)"]} style={StyleSheet.absoluteFillObject} />
+        <View style={[styles.toolbar,{paddingBottom:Math.max(insets.bottom,8)}]}>
           <View style={styles.toolbarRow}>
             <TouchableOpacity style={styles.toolBtn} onPress={handlePickGallery} testID="attach-image-btn" accessibilityLabel="Attach image from gallery">
               <Ionicons name="image-outline" size={22} color={images.length>0?colors.brand:colors.onSurfaceMuted} />
@@ -509,11 +508,7 @@ const styles = StyleSheet.create({
   },
   errorText: { color: colors.error, fontSize: 13, fontWeight: "600", flex: 1 },
   toolbar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,
