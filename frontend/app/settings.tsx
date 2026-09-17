@@ -124,41 +124,56 @@ export default function Settings() {
       ],
     },
     {
-      title: "Support",
+      title: "Support & Legal",
       rows: [
+        {
+          icon: "information-circle-outline",
+          label: "About Private Voices",
+          chevron: true,
+          onPress: () => router.push({ pathname: "/legal", params: { type: "about" } }),
+        },
+        {
+          icon: "book-outline",
+          label: "Community guidelines",
+          chevron: true,
+          onPress: () => router.push({ pathname: "/legal", params: { type: "guidelines" } }),
+        },
+        {
+          icon: "document-text-outline",
+          label: "Terms of Service",
+          chevron: true,
+          onPress: () => router.push({ pathname: "/legal", params: { type: "terms" } }),
+        },
+        {
+          icon: "shield-checkmark-outline",
+          label: "Privacy Policy",
+          chevron: true,
+          onPress: () => router.push({ pathname: "/legal", params: { type: "privacy" } }),
+        },
+        {
+          icon: "shield-outline",
+          label: "Safety Center",
+          chevron: true,
+          onPress: () => router.push({ pathname: "/legal", params: { type: "safety" } }),
+        },
+        {
+          icon: "help-circle-outline",
+          label: "Help Center",
+          chevron: true,
+          onPress: () => router.push({ pathname: "/legal", params: { type: "help" } }),
+        },
+        {
+          icon: "mail-outline",
+          label: "Contact Us",
+          chevron: true,
+          onPress: () => router.push({ pathname: "/legal", params: { type: "contact" } }),
+        },
         {
           icon: "bug-outline",
           label: "Report a bug",
           hint: "Found an issue? Let us know",
           chevron: true,
           onPress: () => setBugModalVisible(true),
-        },
-        {
-          icon: "help-circle-outline",
-          label: "Report a problem",
-          chevron: true,
-          onPress: () =>
-            Alert.alert("Report a Problem", "Need help? Email our support team directly at support@privatevoices.app"),
-        },
-        {
-          icon: "book-outline",
-          label: "Community guidelines",
-          chevron: true,
-          onPress: () =>
-            Alert.alert(
-              "Community Guidelines",
-              "1. Be kind and empathetic.\n2. Respect anonymity.\n3. No harassment, hate speech, or doxxing.\n4. Support others safely."
-            ),
-        },
-        {
-          icon: "information-circle-outline",
-          label: "About Private Voices",
-          chevron: true,
-          onPress: () =>
-            Alert.alert(
-              "About Private Voices",
-              "Private Voices v1.0.0\n\nA safe, anonymous social network built for honest conversations, whispers, and supportive communities."
-            ),
         },
       ],
     },

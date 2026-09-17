@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Private Voices",
-    "slug": "private-voices",
+    "slug": "privatevoices",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -40,6 +40,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "61928545-173c-44a9-82ae-34905cd4ab57"
+      }
     }
   }
 }
