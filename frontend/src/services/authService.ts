@@ -23,21 +23,24 @@ export type UserProfile = {
   uid: string;
   username: string;
   usernameLower?: string;
+  displayName?: string;
   email?: string;
   avatarIcon: string;
   avatarGradient: [string, string];
   avatarUrl?: string;
+  photoURL?: string;
   themeColor: string;
   bio?: string;
   reputationScore: number;
-  anonymityEnabled?: boolean;
   followersCount: number;
   followingCount: number;
   postsCount: number;
+  privacy: {
+    anonymousMessagesEnabled: boolean;
+  };
   lastUsernameChangeAt?: any;
   nextUsernameChangeAt?: any;
   joinedAt?: any;
-  isAnonymous?: boolean;
 };
 
 export type AuthError = {
@@ -102,17 +105,20 @@ export const ensureUserProfile = async (user: User): Promise<UserProfile> => {
     const newProfile: UserProfile = {
       uid: user.uid,
       username: derivedUsername,
+      displayName: user.displayName ?? derivedUsername,
       email: user.email ?? undefined,
+      photoURL: user.photoURL ?? undefined,
       avatarIcon: "person",
       avatarGradient: ["#8B5CF6", "#06B6D4"],
       themeColor: "#8B5CF6",
       bio: "",
       reputationScore: 100,
-      anonymityEnabled: true,
       followersCount: 0,
       followingCount: 0,
       postsCount: 0,
-      isAnonymous: user.isAnonymous ?? false,
+      privacy: {
+        anonymousMessagesEnabled: true,
+      },
       joinedAt: serverTimestamp(),
     };
 
@@ -145,17 +151,19 @@ export const registerWithEmail = async (
   const profile: UserProfile = {
     uid: user.uid,
     username,
+    displayName: username,
     email,
     avatarIcon: "person",
     avatarGradient: ["#8B5CF6", "#06B6D4"],
     themeColor: "#8B5CF6",
     bio: "",
     reputationScore: 100,
-    anonymityEnabled: true,
     followersCount: 0,
     followingCount: 0,
     postsCount: 0,
-    isAnonymous: false,
+    privacy: {
+      anonymousMessagesEnabled: true,
+    },
     joinedAt: serverTimestamp(),
   };
 
@@ -240,13 +248,13 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
 export const createUserProfile = async (
   uid: string,
-  profileData: Omit<UserProfile, "uid" | "reputationScore" | "anonymityEnabled">
+  profileData: Omit<UserProfile, "uid" | "reputationScore">
 ): Promise<UserProfile> => {
   const fullProfile: UserProfile = {
     uid,
     ...profileData,
     reputationScore: 100,
-    anonymityEnabled: true,
+    privacy: profileData.privacy ?? { anonymousMessagesEnabled: true },
     joinedAt: serverTimestamp(),
   };
   await setDoc(doc(db, "users", uid), fullProfile, { merge: true });

@@ -15,9 +15,11 @@ import { getUidByUsername } from "./usernameService";
 
 export interface WhisperMessage {
   id: string;
-  recipientHandle: string;
+  recipientId?: string;
   recipientUid?: string;
+  recipientHandle: string;
   text: string;
+  isAnonymous?: boolean;
   mood?: string | null;
   time: string;
   unread: boolean;
@@ -41,9 +43,11 @@ export const sendWhisperInFirestore = async (
 
     const whispersRef = collection(db, "whispers");
     await addDoc(whispersRef, {
-      recipientHandle: cleanHandle,
+      recipientId: recipientUid || null,
       recipientUid: recipientUid || null,
+      recipientHandle: cleanHandle,
       text,
+      isAnonymous: true,
       mood: mood || null,
       unread: true,
       reactions: 0,
