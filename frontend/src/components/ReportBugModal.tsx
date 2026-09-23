@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Platform,
   ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
 
 import { colors, font, radii, spacing } from "@/src/theme";
@@ -68,7 +69,10 @@ export default function ReportBugModal({ visible, onClose }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.scrim}>
-        <View style={styles.sheet}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.sheet}
+        >
           <LinearGradient colors={["#1E293B", "#0F172A"]} style={StyleSheet.absoluteFillObject} />
 
           <View style={styles.header}>
@@ -151,7 +155,7 @@ export default function ReportBugModal({ visible, onClose }: Props) {
               </TouchableOpacity>
             </ScrollView>
           )}
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

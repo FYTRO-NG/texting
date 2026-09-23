@@ -8,7 +8,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 
 import { colors, font, radii, spacing } from "@/src/theme";
@@ -70,7 +72,10 @@ export default function ReportModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.scrim}>
-        <View style={styles.card}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.card}
+        >
           <LinearGradient colors={["#1E293B", "#0F172A"]} style={StyleSheet.absoluteFillObject} />
 
           {submitted ? (
@@ -148,7 +153,7 @@ export default function ReportModal({
               </TouchableOpacity>
             </>
           )}
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
