@@ -125,7 +125,13 @@ export const ensureUserProfile = async (user: User): Promise<UserProfile> => {
     await setDoc(userRef, newProfile);
     return newProfile;
   } catch (e: any) {
-    console.error(`[ensureUserProfile] Failed for UID ${user.uid}:`, e);
+    console.error("🚨 FIRESTORE USER PROFILE SYNC ERROR:", {
+      name: e?.name,
+      code: e?.code,
+      message: e?.message,
+      details: e?.details,
+      path: `users/${user.uid}`,
+    });
     throw new Error(
       e?.message || "Failed to synchronize user profile. Please check your internet connection."
     );
@@ -168,9 +174,19 @@ export const registerWithEmail = async (
   };
 
   try {
+    console.log(
+      "🔥 CONFIGURED FIRESTORE DATABASE ID:",
+      process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices"
+    );
     await setDoc(doc(db, "users", user.uid), profile);
   } catch (e: any) {
-    console.error("[registerWithEmail] Failed to write Firestore user profile:", e);
+    console.error("🚨 FIRESTORE REGISTRATION WRITE ERROR:", {
+      name: e?.name,
+      code: e?.code,
+      message: e?.message,
+      details: e?.details,
+      path: `users/${user.uid}`,
+    });
     throw new Error(
       "Account created, but profile setup failed. Please check your network connection and try again."
     );
