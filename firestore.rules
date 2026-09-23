@@ -121,6 +121,11 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    match /bug_reports/{reportId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+
     match /moderation_reports/{reportId} {
       allow create: if isAuthenticated();
       allow read, update, delete: if false;

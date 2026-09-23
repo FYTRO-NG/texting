@@ -1,4 +1,5 @@
 import { db, auth } from "../firebase";
+import { ensureAnonymousAuth } from "./authService";
 import {
   collection,
   addDoc,
@@ -155,7 +156,11 @@ export const submitBugReport = async (data: {
   category?: string;
   platform?: string;
 }) => {
-  const currentUserId = auth?.currentUser?.uid || "anon-user";
+  let user = auth?.currentUser;
+  if (!user) {
+    user = await ensureAnonymousAuth().catch(() => null);
+  }
+  const currentUserId = user?.uid || "anon-user";
   const bugsRef = collection(db, "bug_reports");
 
   await addDoc(bugsRef, {
