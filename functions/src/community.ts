@@ -1,4 +1,4 @@
-﻿/**
+/**
  * community.ts — Private Voices Community System Cloud Functions (2nd gen)
  * 
  * Callable Functions:
@@ -12,7 +12,7 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-const db = admin.firestore();
+const db = admin.firestore("private-voices");
 
 // ─── Reserved Slugs ─────────────────────────────────────────────────────────────
 const RESERVED_SLUGS = new Set([

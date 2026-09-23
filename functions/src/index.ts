@@ -16,7 +16,7 @@ import { auth } from "firebase-functions/v1";
 
 admin.initializeApp();
 
-const db = admin.firestore();
+const db = admin.firestore("private-voices");
 
 // Re-export username functions (defined in username.ts)
 export {

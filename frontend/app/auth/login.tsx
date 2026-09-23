@@ -54,7 +54,7 @@ export default function Login() {
       router.replace("/(tabs)");
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(getFriendlyError(err.code));
+      setError((err.code ? getFriendlyError(err.code) : null) || err.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -70,7 +70,7 @@ export default function Login() {
       router.replace("/(tabs)");
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
-        setError(getFriendlyError(err.code));
+        setError((err.code ? getFriendlyError(err.code) : null) || err.message || "Google sign-in failed. Please try again.");
       }
     } finally {
       setLoading(false);

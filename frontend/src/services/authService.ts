@@ -82,6 +82,50 @@ export const getFriendlyError = (code: string): string => {
 
 // ─── Email / Password Register ────────────────────────────────────────────────
 
+export const ensureUserProfile = async (user: User): Promise<UserProfile> => {
+  if (!user || !user.uid) {
+    throw new Error("Cannot ensure profile for unauthenticated user.");
+  }
+
+  const userRef = doc(db, "users", user.uid);
+  try {
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      return snap.data() as UserProfile;
+    }
+
+    // Document does not exist — repair orphan account with initial default profile
+    const derivedUsername =
+      user.displayName ??
+      (user.email ? user.email.split("@")[0] : `User_${user.uid.slice(0, 6)}`);
+
+    const newProfile: UserProfile = {
+      uid: user.uid,
+      username: derivedUsername,
+      email: user.email ?? undefined,
+      avatarIcon: "person",
+      avatarGradient: ["#8B5CF6", "#06B6D4"],
+      themeColor: "#8B5CF6",
+      bio: "",
+      reputationScore: 100,
+      anonymityLevel: 100,
+      followersCount: 0,
+      followingCount: 0,
+      postsCount: 0,
+      isAnonymous: user.isAnonymous ?? false,
+      joinedAt: serverTimestamp(),
+    };
+
+    await setDoc(userRef, newProfile);
+    return newProfile;
+  } catch (e: any) {
+    console.error(`[ensureUserProfile] Failed for UID ${user.uid}:`, e);
+    throw new Error(
+      e?.message || "Failed to synchronize user profile. Please check your internet connection."
+    );
+  }
+};
+
 export const registerWithEmail = async (
   email: string,
   password: string,
@@ -98,26 +142,30 @@ export const registerWithEmail = async (
   }
 
   // Create Firestore user document with zero-initialized social counters
+  const profile: UserProfile = {
+    uid: user.uid,
+    username,
+    email,
+    avatarIcon: "person",
+    avatarGradient: ["#8B5CF6", "#06B6D4"],
+    themeColor: "#8B5CF6",
+    bio: "",
+    reputationScore: 100,
+    anonymityLevel: 100,
+    followersCount: 0,
+    followingCount: 0,
+    postsCount: 0,
+    isAnonymous: false,
+    joinedAt: serverTimestamp(),
+  };
+
   try {
-    const profile: UserProfile = {
-      uid: user.uid,
-      username,
-      email,
-      avatarIcon: "person",
-      avatarGradient: ["#8B5CF6", "#06B6D4"],
-      themeColor: "#8B5CF6",
-      bio: "",
-      reputationScore: 100,
-      anonymityLevel: 100,
-      followersCount: 0,
-      followingCount: 0,
-      postsCount: 0,
-      isAnonymous: false,
-      joinedAt: serverTimestamp(),
-    };
-    await setDoc(doc(db, "users", user.uid), profile, { merge: true });
-  } catch (e) {
-    console.warn("Could not write Firestore user document:", e);
+    await setDoc(doc(db, "users", user.uid), profile);
+  } catch (e: any) {
+    console.error("[registerWithEmail] Failed to write Firestore user profile:", e);
+    throw new Error(
+      "Account created, but profile setup failed. Please check your network connection and try again."
+    );
   }
 
   return user;
@@ -131,6 +179,8 @@ export const loginWithEmail = async (
   password: string
 ): Promise<User> => {
   const credential = await signInWithEmailAndPassword(auth, email, password);
+  // Repair orphan Auth account if profile is missing
+  await ensureUserProfile(credential.user);
   return credential.user;
 };
 
@@ -141,34 +191,8 @@ export const loginWithGoogle = async (): Promise<User> => {
   provider.setCustomParameters({ prompt: "select_account" });
   const credential = await signInWithPopup(auth, provider);
   const user = credential.user;
-
-  // Create Firestore profile if it doesn't already exist
-  try {
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) {
-      const profile: UserProfile = {
-        uid: user.uid,
-        username: user.displayName ?? `User_${user.uid.slice(0, 6)}`,
-        email: user.email ?? undefined,
-        avatarIcon: "person",
-        avatarGradient: ["#8B5CF6", "#06B6D4"],
-        themeColor: "#8B5CF6",
-        bio: "",
-        reputationScore: 100,
-        anonymityLevel: 100,
-        followersCount: 0,
-        followingCount: 0,
-        postsCount: 0,
-        isAnonymous: false,
-        joinedAt: serverTimestamp(),
-      };
-      await setDoc(userRef, profile, { merge: true });
-    }
-  } catch (e) {
-    console.warn("Could not check/create Firestore Google user document:", e);
-  }
-
+  // Repair or create profile if missing
+  await ensureUserProfile(user);
   return user;
 };
 
@@ -195,8 +219,23 @@ export const logout = async (): Promise<void> => {
 // ─── Profile Helpers ──────────────────────────────────────────────────────────
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
-  const snap = await getDoc(doc(db, "users", uid));
-  return snap.exists() ? (snap.data() as UserProfile) : null;
+  const userRef = doc(db, "users", uid);
+  const snap = await getDoc(userRef);
+
+  if (snap.exists()) {
+    return snap.data() as UserProfile;
+  }
+
+  // If current logged-in user profile document is missing, auto-repair
+  if (auth?.currentUser?.uid === uid) {
+    try {
+      return await ensureUserProfile(auth.currentUser);
+    } catch (e) {
+      console.error("[getUserProfile] Auto-repair failed for current user:", e);
+    }
+  }
+
+  return null;
 };
 
 export const createUserProfile = async (

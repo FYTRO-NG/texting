@@ -15,7 +15,7 @@ import {
   UserInterestProfile,
 } from "./types";
 
-const db = admin.firestore();
+const db = admin.firestore("private-voices");
 
 /**
  * Trigger: On Post Created -> Extract and index normalized hashtags

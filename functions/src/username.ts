@@ -1,4 +1,4 @@
-﻿/**
+/**
  * username.ts — Private Voices Username Cloud Functions (2nd gen)
  *
  * Functions:
@@ -10,7 +10,7 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-const db = admin.firestore();
+const db = admin.firestore("private-voices");
 
 // ─── Reserved names ────────────────────────────────────────────────────────────
 
