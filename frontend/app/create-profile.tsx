@@ -137,7 +137,7 @@ export default function CreateProfile() {
 
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <ScrollView
             contentContainerStyle={{ padding: spacing.xl, paddingBottom: 120 }}

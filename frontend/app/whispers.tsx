@@ -13,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -199,10 +200,14 @@ export default function Whispers() {
         </View>
       </SafeAreaView>
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Link Card */}
         <View style={styles.linkCard}>
           <LinearGradient
@@ -508,6 +513,7 @@ export default function Whispers() {
           </Text>
         </View>
       </ScrollView>
+    </KeyboardAvoidingView>
     </View>
   );
 }

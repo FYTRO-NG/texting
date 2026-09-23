@@ -55,7 +55,7 @@ export default function Appeal() {
           <Text style={styles.headerTitle}>Account Safety Appeal</Text>
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
             {submitted ? (
               <View style={styles.submittedWrap}>
