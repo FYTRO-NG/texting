@@ -30,7 +30,7 @@ export type UserProfile = {
   themeColor: string;
   bio?: string;
   reputationScore: number;
-  anonymityLevel: number;
+  anonymityEnabled?: boolean;
   followersCount: number;
   followingCount: number;
   postsCount: number;
@@ -108,7 +108,7 @@ export const ensureUserProfile = async (user: User): Promise<UserProfile> => {
       themeColor: "#8B5CF6",
       bio: "",
       reputationScore: 100,
-      anonymityLevel: 100,
+      anonymityEnabled: true,
       followersCount: 0,
       followingCount: 0,
       postsCount: 0,
@@ -151,7 +151,7 @@ export const registerWithEmail = async (
     themeColor: "#8B5CF6",
     bio: "",
     reputationScore: 100,
-    anonymityLevel: 100,
+    anonymityEnabled: true,
     followersCount: 0,
     followingCount: 0,
     postsCount: 0,
@@ -240,13 +240,13 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
 export const createUserProfile = async (
   uid: string,
-  profileData: Omit<UserProfile, "uid" | "reputationScore" | "anonymityLevel">
+  profileData: Omit<UserProfile, "uid" | "reputationScore" | "anonymityEnabled">
 ): Promise<UserProfile> => {
   const fullProfile: UserProfile = {
     uid,
     ...profileData,
     reputationScore: 100,
-    anonymityLevel: 100,
+    anonymityEnabled: true,
     joinedAt: serverTimestamp(),
   };
   await setDoc(doc(db, "users", uid), fullProfile, { merge: true });

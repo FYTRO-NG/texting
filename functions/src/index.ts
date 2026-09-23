@@ -62,7 +62,7 @@ export const onUserCreate = auth.user().onCreate(async (user) => {
     themeColor: "#8B5CF6",
     bio: "",
     reputationScore: 100,
-    anonymityLevel: 100,
+    anonymityEnabled: true,
     followersCount: 0,
     followingCount: 0,
     postsCount: 0,

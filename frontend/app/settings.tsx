@@ -135,7 +135,7 @@ export default function Settings() {
           onPress: () =>
             Alert.alert(
               "Privacy Controls",
-              "Your identity is 100% anonymous. Private Voices does not link your posts, echoes, or whispers to your identity."
+              "Private Voices protects your privacy. Whispers are anonymous and posts use pseudonymous handles. Minimal technical logs are retained solely for abuse prevention and legal compliance."
             ),
         },
         {

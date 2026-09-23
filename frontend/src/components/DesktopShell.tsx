@@ -123,7 +123,7 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
               <Text style={styles.widgetTitle}>Privacy Standard</Text>
             </View>
             <Text style={styles.privacyDesc}>
-              Private Voices guarantees zero tracking and absolute identity protection. Your voice is always encrypted and anonymous.
+              Private Voices is designed for privacy-first expression. Whispers are anonymous and public posts use pseudonymous handles while maintaining platform safety standards.
             </Text>
           </View>
         </ScrollView>
