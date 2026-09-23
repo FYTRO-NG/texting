@@ -91,7 +91,7 @@ export default function Login() {
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
         >
           <ScrollView
             contentContainerStyle={styles.scroll}

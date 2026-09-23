@@ -166,7 +166,7 @@ export default function Create() {
           <Animated.View style={[styles.progressBar,{width:progressAnim.interpolate({inputRange:[0,100],outputRange:["0%","100%"]})}]} />
         </View>
       )}
-      <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==="ios"?"padding":"height"} keyboardVerticalOffset={0}>
+      <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined} keyboardVerticalOffset={0}>
         <ScrollView contentContainerStyle={{paddingBottom:spacing.md}} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {error ? (
             <View style={styles.errorBox} accessibilityRole="alert">

@@ -73,7 +73,7 @@ export default function ReportModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.scrim}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
           style={styles.card}
         >
           <LinearGradient colors={["#1E293B", "#0F172A"]} style={StyleSheet.absoluteFillObject} />

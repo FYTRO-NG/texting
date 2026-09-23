@@ -193,7 +193,7 @@ export default function PostDetail() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
       >
         <ScrollView
           contentContainerStyle={{ paddingBottom: 90 }}
