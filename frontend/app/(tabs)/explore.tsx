@@ -286,6 +286,8 @@ export default function Explore() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
         {/* Explore Recommendation Feed */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
