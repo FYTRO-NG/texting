@@ -60,6 +60,14 @@ service firebase.storage {
           && isUnder15MB();
     }
 
+    // ─── Story images ──────────────────────────────────────────────────────────
+    // Path: stories/{userId}/{filename}
+
+    match /stories/{userId}/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && isImage() && isUnder10MB();
+    }
+
     // ─── Default deny ─────────────────────────────────────────────────────────
 
     match /{allPaths=**} {

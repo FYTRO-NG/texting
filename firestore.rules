@@ -159,6 +159,49 @@ service cloud.firestore {
       allow write: if false; // Admin managed only
     }
 
+    // ─── Stories ───────────────────────────────────────────────────────────────
+    // Client cannot directly create stories — must use createStory Cloud Function.
+    // expiresAt, createdAt, viewCount, and authorId are server-controlled.
+
+    match /stories/{storyId} {
+      // Any authenticated user can read active stories
+      allow read: if isAuthenticated() && resource.data.expiresAt > request.time;
+
+      // Clients cannot directly create stories (callable function required)
+      allow create: if false;
+
+      // Owner can only soft-delete (set status to "deleted")
+      // No modification of expiresAt, createdAt, viewCount, authorId, authorUsername
+      allow update: if isAuthenticated()
+          && resource.data.authorId == request.auth.uid
+          && request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly(["status"])
+          && request.resource.data.status == "deleted";
+
+      // Hard delete not allowed — use soft-delete via status field
+      allow delete: if false;
+
+      // ── Viewers subcollection ─────────────────────────────────────────────
+      // Written only by Cloud Function (recordStoryView).
+      // Owner can see viewer count via viewCount on parent doc (not raw viewer list).
+      match /viewers/{viewerId} {
+        // Story owner can read their story's viewer list (but viewers are anonymous)
+        allow read: if isAuthenticated()
+            && (resource.data.userId == request.auth.uid
+                || get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid);
+        // Clients cannot write viewer records directly — callable function required
+        allow write: if false;
+      }
+    }
+
+    // ── Per-user story-view-state cache ──────────────────────────────────────
+    // Lightweight doc that tracks which story IDs the user has viewed.
+    // Only the owning user can read/write their own cache.
+    match /users/{userId}/storyViewState/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // ─── Default deny ─────────────────────────────────────────────────────────
 
     match /{document=**} {

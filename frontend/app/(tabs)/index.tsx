@@ -6,6 +6,7 @@ import { FlatList, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, 
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import PostCard from "@/src/components/PostCard";
+import StoryTray from "@/src/components/StoryTray";
 import { Post } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 
@@ -120,23 +121,29 @@ export default function Home() {
           />
         }
         ListHeaderComponent={
-          <View style={styles.aiCard}>
-            <LinearGradient
-              colors={["rgba(6,182,212,0.18)", "rgba(139,92,246,0.10)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <View style={styles.aiIconWrap}>
-              <Ionicons name="sparkles" size={18} color={colors.brand} />
+          <View>
+            {/* Story Tray */}
+            <StoryTray onOpenComposer={() => router.push("/story-composer" as any)} />
+
+            {/* AI community picks card */}
+            <View style={[styles.aiCard, { marginTop: spacing.md }]}>
+              <LinearGradient
+                colors={["rgba(6,182,212,0.18)", "rgba(139,92,246,0.10)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <View style={styles.aiIconWrap}>
+                <Ionicons name="sparkles" size={18} color={colors.brand} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiTitle}>Smart Community picks for you</Text>
+                <Text style={styles.aiSub}>3 new spaces matched to your echoes</Text>
+              </View>
+              <TouchableOpacity style={styles.aiBtn} onPress={() => router.push("/communities")} testID="ai-picks-btn">
+                <Text style={styles.aiBtnText}>Discover</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.aiTitle}>Smart Community picks for you</Text>
-              <Text style={styles.aiSub}>3 new spaces matched to your echoes</Text>
-            </View>
-            <TouchableOpacity style={styles.aiBtn} onPress={() => router.push("/communities")} testID="ai-picks-btn">
-              <Text style={styles.aiBtnText}>Discover</Text>
-            </TouchableOpacity>
           </View>
         }
       />

@@ -74,6 +74,19 @@ export default function Explore() {
     }
   }, [activeHashtagFilter]);
 
+  // Debounced search query for performance
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 150);
+    return () => clearTimeout(handler);
+  }, [query]);
+
+  const activeQuery = debouncedQuery.trim().toLowerCase();
+  const isSearching = activeQuery.length > 0;
+
   // Merge indexed hashtags with live post tags
   const tagsMap = React.useMemo(() => {
     if (indexedHashtags.length > 0) {
@@ -98,18 +111,37 @@ export default function Explore() {
       .sort((a, b) => parseInt(b.posts) - parseInt(a.posts));
   }, [indexedHashtags, livePosts]);
 
-  const filteredTags = tagsMap.filter(
-    (t) => !query || t.tag.toLowerCase().includes(query.toLowerCase())
-  );
+  const filteredTags = React.useMemo(() => {
+    return tagsMap.filter(
+      (t) => !activeQuery || t.tag.toLowerCase().includes(activeQuery)
+    );
+  }, [tagsMap, activeQuery]);
 
-  const filteredCreators = liveCreators.filter(
-    (c) => !query || c.username.toLowerCase().includes(query.toLowerCase())
-  );
+  const filteredCreators = React.useMemo(() => {
+    return liveCreators.filter(
+      (c) => !activeQuery || c.username.toLowerCase().includes(activeQuery)
+    );
+  }, [liveCreators, activeQuery]);
 
-  const filteredCommunities = liveCommunities.filter(
-    (cm) => !query || cm.name.toLowerCase().includes(query.toLowerCase()) || cm.description.toLowerCase().includes(query.toLowerCase())
-  );
+  const filteredCommunities = React.useMemo(() => {
+    return liveCommunities.filter(
+      (cm) =>
+        !activeQuery ||
+        cm.name.toLowerCase().includes(activeQuery) ||
+        cm.description.toLowerCase().includes(activeQuery)
+    );
+  }, [liveCommunities, activeQuery]);
 
+  const basePosts = recommendedPosts.length > 0 ? recommendedPosts : livePosts;
+
+  const filteredPosts = React.useMemo(() => {
+    return basePosts.filter(
+      (post) =>
+        !activeQuery ||
+        post.text.toLowerCase().includes(activeQuery) ||
+        (post.author && post.author.toLowerCase().includes(activeQuery))
+    );
+  }, [basePosts, activeQuery]);
 
   return (
     <View style={styles.container} testID="explore-screen">
@@ -132,7 +164,7 @@ export default function Explore() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search creators, tags, communities…"
+            placeholder="Search creators, tags, communities, posts…"
             placeholderTextColor={colors.onSurfaceDim}
             style={styles.searchInput}
             testID="explore-search-input"
@@ -144,167 +176,209 @@ export default function Explore() {
           )}
         </View>
 
-        <FlatList
-          horizontal
-          data={TABS}
-          keyExtractor={(t) => t}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsRow}
-          renderItem={({ item, index }) => {
-            const active = index === tab;
-            return (
-              <TouchableOpacity
-                onPress={() => setTab(index)}
-                style={[styles.tabChip, active && styles.tabChipActive]}
-                testID={`explore-tab-${index}`}
-              >
-                <Text style={[styles.tabText, active && styles.tabTextActive]}>{item}</Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
+        {!isSearching && (
+          <FlatList
+            horizontal
+            data={TABS}
+            keyExtractor={(t) => t}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsRow}
+            renderItem={({ item, index }) => {
+              const active = index === tab;
+              return (
+                <TouchableOpacity
+                  onPress={() => setTab(index)}
+                  style={[styles.tabChip, active && styles.tabChipActive]}
+                  testID={`explore-tab-${index}`}
+                >
+                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{item}</Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
       </SafeAreaView>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 140 + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: 140 + insets.bottom, paddingTop: isSearching ? spacing.md : 0 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
-        <TouchableOpacity style={styles.hero} activeOpacity={0.9} testID="explore-hero">
-          <Image
-            source={{ uri: "https://images.unsplash.com/photo-1576344581549-060a332463d2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHw0fHxjeWJlcnB1bmslMjBuZW9uJTIwY2l0eSUyMG5pZ2h0JTIwcGhvdG9ncmFwaHl8ZW58MHx8fHwxNzg1ODc0NTA3fDA&ixlib=rb-4.1.0&q=85" }}
-            style={StyleSheet.absoluteFillObject}
-            contentFit="cover"
-          />
-          <LinearGradient
-            colors={["rgba(15,23,42,0.1)", "rgba(15,23,42,0.9)"]}
-            style={StyleSheet.absoluteFillObject}
-          />
-          <View style={styles.heroBadge}>
-            <Ionicons name="flame" size={12} color={colors.warning} />
-            <Text style={styles.heroBadgeText}>TRENDING NOW</Text>
-          </View>
-          <View style={styles.heroBody}>
-            <Text style={styles.heroTitle}>The Anonymity Renaissance</Text>
-            <Text style={styles.heroSub}>How honest communities are outperforming social feeds.</Text>
-            <View style={styles.heroMeta}>
-              <View style={styles.heroDot} />
-              <Text style={styles.heroMetaText}>12.4K echoes · Technology</Text>
+        {/* Hero Banner (Only when not searching) */}
+        {!isSearching && (
+          <TouchableOpacity style={styles.hero} activeOpacity={0.9} testID="explore-hero">
+            <Image
+              source={{ uri: "https://images.unsplash.com/photo-1576344581549-060a332463d2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHw0fHxjeWJlcnB1bmslMjBuZW9uJTIwY2l0eSUyMG5pZ2h0JTIwcGhvdG9ncmFwaHl8ZW58MHx8fHwxNzg1ODc0NTA3fDA&ixlib=rb-4.1.0&q=85" }}
+              style={StyleSheet.absoluteFillObject}
+              contentFit="cover"
+            />
+            <LinearGradient
+              colors={["rgba(15,23,42,0.1)", "rgba(15,23,42,0.9)"]}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={styles.heroBadge}>
+              <Ionicons name="flame" size={12} color={colors.warning} />
+              <Text style={styles.heroBadgeText}>TRENDING NOW</Text>
             </View>
-          </View>
-        </TouchableOpacity>
+            <View style={styles.heroBody}>
+              <Text style={styles.heroTitle}>The Anonymity Renaissance</Text>
+              <Text style={styles.heroSub}>How honest communities are outperforming social feeds.</Text>
+              <View style={styles.heroMeta}>
+                <View style={styles.heroDot} />
+                <Text style={styles.heroMetaText}>12.4K echoes · Technology</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Trending Tags */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Trending hashtags</Text>
-            <TouchableOpacity>
-              <Text style={styles.sectionLink}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.tagsGrid}>
-            {filteredTags.map((t, i) => (
-              <TouchableOpacity
-                key={t.tag}
-                style={[styles.tagCard, activeHashtagFilter === t.tag && { borderColor: colors.brand, backgroundColor: colors.brandSoft }]}
-                onPress={() => setActiveHashtagFilter((prev) => (prev === t.tag ? null : t.tag))}
-                activeOpacity={0.8}
-                testID={`trend-tag-${i}`}
-              >
-                <View style={styles.tagRank}>
-                  <Text style={styles.tagRankText}>{i + 1}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.tagName}>{t.tag}</Text>
-                  <Text style={styles.tagCount}>{t.posts} posts {t.momentum > 1.2 ? "• 🔥 Spiking" : ""}</Text>
-                </View>
-                <Ionicons name="trending-up" size={16} color={colors.success} />
+            <Text style={styles.sectionTitle}>
+              {isSearching ? `Hashtags (${filteredTags.length})` : "Trending hashtags"}
+            </Text>
+            {!isSearching && (
+              <TouchableOpacity>
+                <Text style={styles.sectionLink}>See all</Text>
               </TouchableOpacity>
-            ))}
+            )}
           </View>
+          {filteredTags.length > 0 ? (
+            <View style={styles.tagsGrid}>
+              {filteredTags.map((t, i) => (
+                <TouchableOpacity
+                  key={t.tag}
+                  style={[styles.tagCard, activeHashtagFilter === t.tag && { borderColor: colors.brand, backgroundColor: colors.brandSoft }]}
+                  onPress={() => setActiveHashtagFilter((prev) => (prev === t.tag ? null : t.tag))}
+                  activeOpacity={0.8}
+                  testID={`trend-tag-${i}`}
+                >
+                  <View style={styles.tagRank}>
+                    <Text style={styles.tagRankText}>{i + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.tagName}>{t.tag}</Text>
+                    <Text style={styles.tagCount}>{t.posts} posts {t.momentum > 1.2 ? "• 🔥 Spiking" : ""}</Text>
+                  </View>
+                  <Ionicons name="trending-up" size={16} color={colors.success} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No hashtags matching "{debouncedQuery}"</Text>
+            </View>
+          )}
         </View>
 
         {/* Suggested Creators */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Popular creators</Text>
-            <TouchableOpacity>
-              <Text style={styles.sectionLink}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            horizontal
-            data={filteredCreators}
-            keyExtractor={(c) => c.uid}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: 12 }}
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                style={styles.creatorCard}
-                onPress={() => router.push({ pathname: "/user/[handle]", params: { handle: item.username } } as any)}
-                activeOpacity={0.85}
-                testID={`creator-card-${index}`}
-              >
-                <Avatar size={64} gradient={item.avatarGradient} icon={item.avatarIcon} />
-                <Text style={styles.creatorName} numberOfLines={1}>@{item.username}</Text>
-                <Text style={styles.creatorFollowers}>{item.followersCount} followers</Text>
-                <TouchableOpacity style={styles.creatorBtn}>
-                  <Text style={styles.creatorBtnText}>Follow</Text>
-                </TouchableOpacity>
+            <Text style={styles.sectionTitle}>
+              {isSearching ? `Creators (${filteredCreators.length})` : "Popular creators"}
+            </Text>
+            {!isSearching && (
+              <TouchableOpacity>
+                <Text style={styles.sectionLink}>See all</Text>
               </TouchableOpacity>
             )}
-          />
+          </View>
+          {filteredCreators.length > 0 ? (
+            <FlatList
+              horizontal
+              data={filteredCreators}
+              keyExtractor={(c) => c.uid}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: 12 }}
+              renderItem={({ item, index }) => (
+                <TouchableOpacity
+                  style={styles.creatorCard}
+                  onPress={() => router.push({ pathname: "/user/[handle]", params: { handle: item.username } } as any)}
+                  activeOpacity={0.85}
+                  testID={`creator-card-${index}`}
+                >
+                  <Avatar size={64} gradient={item.avatarGradient} icon={item.avatarIcon} />
+                  <Text style={styles.creatorName} numberOfLines={1}>@{item.username}</Text>
+                  <Text style={styles.creatorFollowers}>{item.followersCount} followers</Text>
+                  <TouchableOpacity style={styles.creatorBtn}>
+                    <Text style={styles.creatorBtnText}>Follow</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+            />
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No creators matching "{debouncedQuery}"</Text>
+            </View>
+          )}
         </View>
 
         {/* Communities */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Popular communities</Text>
+            <Text style={styles.sectionTitle}>
+              {isSearching ? `Communities (${filteredCommunities.length})` : "Popular communities"}
+            </Text>
             <TouchableOpacity onPress={() => router.push("/communities")}>
               <Text style={styles.sectionLink}>See all</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.commGrid}>
-            {filteredCommunities.slice(0, 4).map((c) => (
-              <TouchableOpacity
-                key={c.id}
-                onPress={() => router.push({ pathname: "/community/[id]", params: { id: c.id } } as any)}
-                style={styles.commCard}
-                activeOpacity={0.85}
-                testID={`explore-comm-${c.id}`}
-              >
-                <Image source={{ uri: c.cover }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-                <LinearGradient
-                  colors={["rgba(15,23,42,0.3)", "rgba(15,23,42,0.95)"]}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View style={styles.commContent}>
-                  <Text style={styles.commEmoji}>{c.emoji}</Text>
-                  <Text style={styles.commName}>{c.name}</Text>
-                  <Text style={styles.commMembers}>{c.members} members</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {filteredCommunities.length > 0 ? (
+            <View style={styles.commGrid}>
+              {filteredCommunities.slice(0, 4).map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  onPress={() => router.push({ pathname: "/community/[id]", params: { id: c.id } } as any)}
+                  style={styles.commCard}
+                  activeOpacity={0.85}
+                  testID={`explore-comm-${c.id}`}
+                >
+                  <Image source={{ uri: c.cover }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+                  <LinearGradient
+                    colors={["rgba(15,23,42,0.3)", "rgba(15,23,42,0.95)"]}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <View style={styles.commContent}>
+                    <Text style={styles.commEmoji}>{c.emoji}</Text>
+                    <Text style={styles.commName}>{c.name}</Text>
+                    <Text style={styles.commMembers}>{c.members} members</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No communities matching "{debouncedQuery}"</Text>
+            </View>
+          )}
         </View>
 
-        {/* Explore Recommendation Feed */}
+        {/* Posts Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              {activeHashtagFilter ? `Posts in ${activeHashtagFilter}` : "Recommended for you"}
+              {isSearching
+                ? `Posts (${filteredPosts.length})`
+                : activeHashtagFilter
+                ? `Posts in ${activeHashtagFilter}`
+                : "Recommended for you"}
             </Text>
-            {activeHashtagFilter && (
+            {activeHashtagFilter && !isSearching && (
               <TouchableOpacity onPress={() => setActiveHashtagFilter(null)}>
                 <Text style={styles.sectionLink}>Clear tag</Text>
               </TouchableOpacity>
             )}
           </View>
-          <View style={{ paddingHorizontal: spacing.lg, gap: 14 }}>
-            {(recommendedPosts.length > 0 ? recommendedPosts : livePosts).slice(0, 15).map((post) => (
-              <PostCard key={`rec-${post.id}`} post={post} />
-            ))}
-          </View>
+          {filteredPosts.length > 0 ? (
+            <View style={{ paddingHorizontal: spacing.lg, gap: 14 }}>
+              {filteredPosts.slice(0, 15).map((post) => (
+                <PostCard key={`rec-${post.id}`} post={post} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No posts matching "{debouncedQuery}"</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -476,4 +550,14 @@ const styles = StyleSheet.create({
   commEmoji: { fontSize: 22 },
   commName: { ...font.title, fontSize: 15, marginTop: 4 },
   commMembers: { ...font.small, color: colors.brand, marginTop: 2, fontWeight: "600" },
+  emptyState: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  emptyText: {
+    ...font.body,
+    fontSize: 13,
+    color: colors.onSurfaceDim,
+    fontStyle: "italic",
+  },
 });

@@ -2,15 +2,20 @@
  * Private Voices — Firebase Cloud Functions
  *
  * Functions:
- *  - onUserCreate:     Auth trigger that initializes user profile with zero counters.
- *  - followUser:       HTTPS Callable — follow a user securely server-side.
- *  - unfollowUser:     HTTPS Callable — unfollow a user securely server-side.
- *  - onFollowCreated:  Firestore trigger — increments follow counters when a follow doc is created.
- *  - onFollowDeleted:  Firestore trigger — decrements follow counters when a follow doc is deleted.
+ *  - onUserCreate:              Auth trigger that initializes user profile with zero counters.
+ *  - followUser:                HTTPS Callable — follow a user securely server-side.
+ *  - unfollowUser:              HTTPS Callable — unfollow a user securely server-side.
+ *  - onFollowCreated:           Firestore trigger — increments follow counters when a follow doc is created.
+ *  - onFollowDeleted:           Firestore trigger — decrements follow counters when a follow doc is deleted.
+ *  - createStory:               HTTPS Callable — creates a Story with server-side timestamps.
+ *  - recordStoryView:           HTTPS Callable — atomically increments viewCount, writes viewer subcollection.
+ *  - deleteStory:               HTTPS Callable — soft-deletes a Story (owner only).
+ *  - onExpiredStoriesCleanup:   Scheduled — marks expired stories as deleted every hour.
  */
 
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { auth } from "firebase-functions/v1";
 
@@ -257,3 +262,167 @@ export const onFollowDeleted = onDocumentDeleted("follows/{followId}", async (ev
     }),
   ]);
 });
+
+// ─── Stories Cloud Functions ───────────────────────────────────────────────
+
+/**
+ * Creates a story doc with server-controlled timestamps (createdAt & expiresAt = +24h).
+ */
+export const createStory = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to create a story.");
+  }
+
+  const uid = request.auth.uid;
+  const { type, content, mediaUrl, backgroundColor } = request.data as {
+    type: "text" | "image";
+    content?: string;
+    mediaUrl?: string;
+    backgroundColor?: string;
+  };
+
+  if (!type || (type !== "text" && type !== "image")) {
+    throw new HttpsError("invalid-argument", "Invalid story type.");
+  }
+
+  if (type === "text" && (!content || content.trim().length === 0)) {
+    throw new HttpsError("invalid-argument", "Text story requires content.");
+  }
+
+  if (type === "image" && (!mediaUrl || mediaUrl.trim().length === 0)) {
+    throw new HttpsError("invalid-argument", "Image story requires mediaUrl.");
+  }
+
+  // Fetch author details
+  const userSnap = await db.collection("users").doc(uid).get();
+  const userData = userSnap.data() || {};
+  const authorUsername = userData.username || "voice";
+  const authorDisplayName = userData.displayName || authorUsername;
+  const authorAvatarIcon = userData.avatarIcon || "person";
+  const authorAvatarGradient = userData.avatarGradient || ["#8B5CF6", "#06B6D4"];
+
+  const now = admin.firestore.Timestamp.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(
+    now.toMillis() + 24 * 60 * 60 * 1000
+  );
+
+  const storyDoc = {
+    authorId: uid,
+    authorUsername,
+    authorDisplayName,
+    authorAvatarIcon,
+    authorAvatarGradient,
+    type,
+    content: content?.trim() || null,
+    mediaUrl: mediaUrl || null,
+    backgroundColor: backgroundColor || null,
+    createdAt: now,
+    expiresAt,
+    viewCount: 0,
+    status: "active",
+  };
+
+  const ref = await db.collection("stories").add(storyDoc);
+  return { success: true, storyId: ref.id };
+});
+
+/**
+ * Records a view for a story atomically using a transaction.
+ * Prevents duplicate view increments per user and enforces viewer privacy.
+ */
+export const recordStoryView = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to record a view.");
+  }
+
+  const uid = request.auth.uid;
+  const { storyId } = request.data as { storyId: string };
+
+  if (!storyId || typeof storyId !== "string") {
+    throw new HttpsError("invalid-argument", "storyId is required.");
+  }
+
+  const storyRef = db.collection("stories").doc(storyId);
+  const viewerRef = storyRef.collection("viewers").doc(uid);
+
+  const result = await db.runTransaction(async (txn) => {
+    const viewerSnap = await txn.get(viewerRef);
+    if (viewerSnap.exists) {
+      return { success: true, alreadyViewed: true };
+    }
+
+    const storySnap = await txn.get(storyRef);
+    if (!storySnap.exists) {
+      throw new HttpsError("not-found", "Story not found.");
+    }
+
+    // Set viewer doc & increment viewCount
+    txn.set(viewerRef, {
+      userId: uid,
+      viewedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    txn.update(storyRef, {
+      viewCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    return { success: true, alreadyViewed: false };
+  });
+
+  return result;
+});
+
+/**
+ * Soft-deletes a story. Author only.
+ */
+export const deleteStory = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to delete a story.");
+  }
+
+  const uid = request.auth.uid;
+  const { storyId } = request.data as { storyId: string };
+
+  if (!storyId || typeof storyId !== "string") {
+    throw new HttpsError("invalid-argument", "storyId is required.");
+  }
+
+  const storyRef = db.collection("stories").doc(storyId);
+  const storySnap = await storyRef.get();
+
+  if (!storySnap.exists) {
+    throw new HttpsError("not-found", "Story not found.");
+  }
+
+  if (storySnap.data()?.authorId !== uid) {
+    throw new HttpsError("permission-denied", "You can only delete your own story.");
+  }
+
+  await storyRef.update({
+    status: "deleted",
+  });
+
+  return { success: true };
+});
+
+/**
+ * Scheduled job running every 1 hour to soft-delete expired stories.
+ */
+export const onExpiredStoriesCleanup = onSchedule("every 1 hours", async () => {
+  const now = admin.firestore.Timestamp.now();
+  const snapshot = await db
+    .collection("stories")
+    .where("status", "==", "active")
+    .where("expiresAt", "<=", now)
+    .get();
+
+  if (snapshot.empty) return;
+
+  const batch = db.batch();
+  snapshot.docs.forEach((docSnap) => {
+    batch.update(docSnap.ref, { status: "deleted" });
+  });
+
+  await batch.commit();
+});
+
