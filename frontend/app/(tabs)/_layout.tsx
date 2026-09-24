@@ -12,7 +12,7 @@ function CreateTabButton({ onPress }: { onPress?: () => void }) {
   const router = useRouter();
   return (
     <TouchableOpacity
-      onPress={() => router.push("/(tabs)/create")}
+      onPress={() => router.push("/create-post")}
       activeOpacity={0.85}
       style={styles.createBtn}
       testID="tab-create-button"
