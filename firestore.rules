@@ -15,7 +15,9 @@ service cloud.firestore {
     function isValidFollow(data) {
       return (data.followerId == request.auth.uid)
           && (data.followingId != request.auth.uid)
-          && data.keys().hasAll(["followerId", "followingId", "createdAt"]);
+          && (data.followerId is string)
+          && (data.followingId is string)
+          && data.keys().hasOnly(["followerId", "followingId", "createdAt"]);
     }
 
     // ─── Users ────────────────────────────────────────────────────────────────
@@ -69,9 +71,8 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
-          && (request.resource.data.keys().hasAny(["userId", "authorId"]))
+          && (request.resource.data.authorId == request.auth.uid)
           && (!request.resource.data.keys().hasAny(["userId"]) || request.resource.data.userId == request.auth.uid)
-          && (!request.resource.data.keys().hasAny(["authorId"]) || request.resource.data.authorId == request.auth.uid)
           && (request.resource.data.text is string)
           && (request.resource.data.text.size() <= 2000)
           && (!request.resource.data.keys().hasAny(["viewCount", "likes", "reposts", "commentsCount"])
@@ -84,13 +85,13 @@ service cloud.firestore {
       // Restricted strictly to post owner editing content/fields.
       // All post interactions (likes, saves, reposts, poll votes, counter increments) are executed via Cloud Functions.
       allow update: if isAuthenticated()
-          && ( (resource.data.userId == request.auth.uid) || (resource.data.authorId == request.auth.uid) )
+          && (resource.data.authorId == request.auth.uid)
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
               "userId", "authorId", "createdAt", "viewCount", "likes", "likedBy", "savedBy", "reposts", "commentsCount", "poll"
           ]);
 
       allow delete: if isAuthenticated()
-          && ( (resource.data.userId == request.auth.uid) || (resource.data.authorId == request.auth.uid) );
+          && (resource.data.authorId == request.auth.uid);
     }
 
     // ─── Comments ─────────────────────────────────────────────────────────────
@@ -100,16 +101,15 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
-          && (request.resource.data.keys().hasAny(["userId", "authorId"]))
+          && (request.resource.data.authorId == request.auth.uid)
           && (!request.resource.data.keys().hasAny(["userId"]) || request.resource.data.userId == request.auth.uid)
-          && (!request.resource.data.keys().hasAny(["authorId"]) || request.resource.data.authorId == request.auth.uid)
           && (request.resource.data.text is string)
           && (request.resource.data.text.size() <= 1000);
 
       allow update: if false;
 
       allow delete: if isAuthenticated()
-          && ( (resource.data.userId == request.auth.uid) || (resource.data.authorId == request.auth.uid) );
+          && (resource.data.authorId == request.auth.uid);
     }
 
     // ─── Follows ─────────────────────────────────────────────────────────────
@@ -145,11 +145,9 @@ service cloud.firestore {
 
     match /chats/{chatId} {
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants);
-      // Created strictly via createChatThread Cloud Function to verify recipient identity in /users
+      // Created and updated strictly via server Cloud Functions to guarantee participant validation & thread state
       allow create: if false;
-      allow update: if isAuthenticated()
-          && (request.auth.uid in resource.data.participants)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lastMessage", "updatedAt", "unreadCount"]);
+      allow update: if false;
 
       match /messages/{msgId} {
         allow read: if isAuthenticated()
@@ -244,9 +242,10 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow create: if isAuthenticated()
-          && ( (request.resource.data.userId == request.auth.uid) || (request.resource.data.authorId == request.auth.uid) || (request.resource.data.reporterId == request.auth.uid) )
-          && request.resource.data.targetId is string
-          && request.resource.data.reason is string
+          && (request.resource.data.authorId == request.auth.uid)
+          && (request.resource.data.targetId is string)
+          && (request.resource.data.reason is string)
+          && (request.resource.data.reason.size() > 0)
           && (request.resource.data.reason.size() <= 2000);
       allow read, update, delete: if false;
     }
@@ -260,6 +259,8 @@ service cloud.firestore {
     match /moderation_reports/{reportId} {
       allow create: if isAuthenticated()
           && (request.resource.data.reporterId == request.auth.uid)
+          && (request.resource.data.reason is string)
+          && (request.resource.data.reason.size() > 0)
           && (request.resource.data.reason.size() <= 2000);
       allow read, update, delete: if false;
     }
@@ -272,10 +273,12 @@ service cloud.firestore {
     // Appeals: User can submit appeal for themselves and read ONLY their own appeal
     match /user_appeals/{appealId} {
       allow create: if isAuthenticated()
-          && ( (request.resource.data.userId == request.auth.uid) || (request.resource.data.authorId == request.auth.uid) )
+          && (request.resource.data.authorId == request.auth.uid)
+          && (request.resource.data.reason is string)
+          && (request.resource.data.reason.size() > 0)
           && (request.resource.data.reason.size() <= 2000);
       allow read: if isAuthenticated()
-          && ( (resource.data.userId == request.auth.uid) || (resource.data.authorId == request.auth.uid) );
+          && (resource.data.authorId == request.auth.uid);
       allow update, delete: if false;
     }
 
