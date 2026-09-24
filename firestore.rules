@@ -12,26 +12,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isDocOwner(authorField) {
-      return isAuthenticated() && request.auth.uid == authorField;
-    }
-
     function isValidFollow(data) {
       return data.followerId == request.auth.uid
           && data.followingId != request.auth.uid
           && data.keys().hasAll(["followerId", "followingId", "createdAt"]);
-    }
-
-    // Checks that protected user profile fields are not manipulated directly
-    function notChangingProtectedUserFields() {
-      return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(["reputationScore", "joinedAt", "uid"]);
-    }
-
-    // Checks that protected post fields are not manipulated on update
-    function notChangingProtectedPostFields() {
-      return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(["userId", "authorId", "createdAt", "viewCount"]);
     }
 
     // ─── Users ────────────────────────────────────────────────────────────────
@@ -42,24 +26,21 @@ service cloud.firestore {
 
       allow create: if isOwner(userId)
           && request.resource.data.uid == userId
-          && (!request.resource.data.keys().hasAny(["reputationScore", "followersCount", "followingCount", "postsCount"])
+          && (!request.resource.data.keys().hasAny(["reputationScore", "followersCount", "followingCount", "postsCount", "roles", "admin", "moderator", "verified"])
               || (request.resource.data.reputationScore == 100
                   && request.resource.data.followersCount == 0
                   && request.resource.data.followingCount == 0
                   && request.resource.data.postsCount == 0));
 
+      // Profile updates restricted strictly to owner, prohibiting counter, reputation, role, or timestamp tampering
       allow update: if isOwner(userId)
           && request.resource.data.uid == userId
-          && (!request.resource.data.keys().hasAny(["reputationScore"]) || request.resource.data.reputationScore == resource.data.reputationScore)
-          && (!request.resource.data.keys().hasAny(["joinedAt"]) || request.resource.data.joinedAt == resource.data.joinedAt)
-          || (isAuthenticated()
-              && request.resource.data.diff(resource.data)
-                  .affectedKeys()
-                  .hasOnly(["followersCount", "followingCount", "postsCount"]));
+          && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(["reputationScore", "followersCount", "followingCount", "postsCount", "joinedAt", "roles", "admin", "moderator", "verified"]);
 
       allow delete: if false;
 
-      // Audit trail of username changes — viewable by owner, written only by Admin/Functions
+      // Username history audit trail — viewable by owner, written only by Admin/Functions
       match /usernameHistory/{historyId} {
         allow read: if isOwner(userId);
         allow write: if false;
@@ -85,16 +66,22 @@ service cloud.firestore {
 
     match /posts/{postId} {
       allow read: if isAuthenticated();
+
       allow create: if isAuthenticated()
           && (request.resource.data.userId == request.auth.uid || request.resource.data.authorId == request.auth.uid)
           && request.resource.data.text.size() <= 2000
-          && (!request.resource.data.keys().hasAny(["viewCount"]) || request.resource.data.viewCount == 0);
+          && (!request.resource.data.keys().hasAny(["viewCount", "likes", "reposts", "commentsCount"])
+              || (request.resource.data.viewCount == 0
+                  && request.resource.data.likes == 0
+                  && request.resource.data.reposts == 0
+                  && request.resource.data.commentsCount == 0));
 
+      // Post updates: Owner can edit text/content without altering protected fields.
+      // Non-owners can only toggle their own like/save status or vote on poll.
       allow update: if isAuthenticated()
-          && ((resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid) && notChangingProtectedPostFields()
-              || request.resource.data.diff(resource.data)
-                  .affectedKeys()
-                  .hasOnly(["likes", "likedBy", "savedBy", "reposts", "commentsCount", "poll"]));
+          && (( (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid)
+                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["userId", "authorId", "createdAt", "viewCount", "likes", "reposts", "commentsCount"]) )
+              || request.resource.data.diff(resource.data).affectedKeys().hasOnly(["likes", "likedBy", "savedBy", "reposts", "commentsCount", "poll"]));
 
       allow delete: if isAuthenticated()
           && (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
@@ -106,6 +93,7 @@ service cloud.firestore {
     match /posts/{postId}/comments/{commentId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated()
+          && (request.resource.data.userId == request.auth.uid || request.resource.data.authorId == request.auth.uid)
           && request.resource.data.text.size() <= 1000;
       allow delete: if isAuthenticated()
           && (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
@@ -123,7 +111,7 @@ service cloud.firestore {
 
     // ─── Anonymous Whispers ───────────────────────────────────────────────────
     // Path: /whispers/{whisperId}
-    // Anonymous messages must NEVER expose the sender's private identity.
+    // Anonymous messages must NEVER expose the sender's private identity to recipient.
 
     match /whispers/{whisperId} {
       allow read: if isAuthenticated()
@@ -132,13 +120,11 @@ service cloud.firestore {
       allow create: if isAuthenticated()
           && request.resource.data.isAnonymous == true
           && request.resource.data.text.size() <= 2000
-          && !request.resource.data.keys().hasAny(["senderId", "senderUid", "authorId"]);
+          && !request.resource.data.keys().hasAny(["senderId", "senderUid", "authorId", "senderEmail", "senderPhone"]);
 
       allow update: if isAuthenticated()
           && (resource.data.recipientId == request.auth.uid || resource.data.recipientUid == request.auth.uid)
-          && request.resource.data.diff(resource.data)
-              .affectedKeys()
-              .hasOnly(["unread", "reactions"]);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["unread", "reactions"]);
 
       allow delete: if false;
     }
@@ -156,6 +142,7 @@ service cloud.firestore {
             && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         allow create: if isAuthenticated()
             && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+            && (request.resource.data.senderId == request.auth.uid || request.resource.data.authorId == request.auth.uid)
             && request.resource.data.text.size() <= 1000;
       }
     }
@@ -165,11 +152,11 @@ service cloud.firestore {
 
     match /communities/{communityId} {
       allow read: if isAuthenticated() || resource.data.visibility == 'public';
-      // Created only via createCommunity Cloud Function to enforce slug uniqueness
+      // Created only via createCommunity Cloud Function to enforce slug uniqueness & initial owner assignment
       allow create: if false;
       allow update: if isAuthenticated()
           && resource.data.ownerId == request.auth.uid
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["ownerId", "slug", "createdAt"]);
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["ownerId", "slug", "createdAt", "memberCount", "postCount"]);
       allow delete: if false;
 
       match /members/{memberId} {
@@ -204,9 +191,7 @@ service cloud.firestore {
       // Owner can only soft-delete (status = "deleted")
       allow update: if isAuthenticated()
           && resource.data.authorId == request.auth.uid
-          && request.resource.data.diff(resource.data)
-              .affectedKeys()
-              .hasOnly(["status"])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
           && request.resource.data.status == "deleted";
 
       allow delete: if false;
@@ -224,6 +209,7 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && resource.data.recipientId == request.auth.uid;
+      // Notifications created by authenticated users or server code for valid recipients
       allow create: if isAuthenticated();
       allow update: if isAuthenticated()
           && resource.data.recipientId == request.auth.uid
@@ -240,7 +226,7 @@ service cloud.firestore {
     }
 
     match /bug_reports/{reportId} {
-      allow create: if true;
+      allow create: if request.resource.data.text.size() <= 2000;
       allow read, update, delete: if false;
     }
 
@@ -249,16 +235,18 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // Moderation events are server-managed internal logs; normal users CANNOT read or update directly
     match /moderationEvents/{eventId} {
-      allow create: if isAuthenticated();
-      allow read, update: if isAuthenticated();
-      allow delete: if false;
+      allow read, write: if false;
     }
 
+    // Appeals: User can submit appeal for themselves and read ONLY their own appeal
     match /user_appeals/{appealId} {
-      allow create: if isAuthenticated();
-      allow read, update: if isAuthenticated();
-      allow delete: if false;
+      allow create: if isAuthenticated()
+          && (request.resource.data.userId == request.auth.uid || request.resource.data.authorId == request.auth.uid);
+      allow read: if isAuthenticated()
+          && (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
+      allow update, delete: if false;
     }
 
     // ─── Server Indices & Configs ─────────────────────────────────────────────
