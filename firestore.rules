@@ -34,12 +34,12 @@ service cloud.firestore {
                   && (request.resource.data.followingCount == 0)
                   && (request.resource.data.postsCount == 0) ));
 
-      // Profile updates restricted strictly to owner, prohibiting counter, reputation, role, or timestamp tampering.
-      // All counter increments (followersCount, followingCount, postsCount) are managed via Cloud Functions / triggers.
+      // Profile updates restricted strictly to owner, prohibiting counter, reputation, role, timestamp, or username tampering.
+      // All username claims, swaps, and counter increments are managed via server Cloud Functions / triggers.
       allow update: if isOwner(userId)
           && (request.resource.data.uid == userId)
           && !request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(["reputationScore", "followersCount", "followingCount", "postsCount", "joinedAt", "roles", "admin", "moderator", "verified"]);
+              .hasAny(["reputationScore", "followersCount", "followingCount", "postsCount", "joinedAt", "roles", "admin", "moderator", "verified", "username", "usernameLower", "lastUsernameChangeAt", "nextUsernameChangeAt"]);
 
       allow delete: if false;
 
