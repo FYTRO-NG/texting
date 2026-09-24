@@ -17,7 +17,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
-      backgroundColor: "#000000",
+      backgroundColor: "#070614",
     },
     edgeToEdgeEnabled: true,
     package: "com.privatevoices",
