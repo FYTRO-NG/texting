@@ -69,7 +69,10 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
-          && ( (request.resource.data.userId == request.auth.uid) || (request.resource.data.authorId == request.auth.uid) )
+          && (request.resource.data.keys().hasAny(["userId", "authorId"]))
+          && (!request.resource.data.keys().hasAny(["userId"]) || request.resource.data.userId == request.auth.uid)
+          && (!request.resource.data.keys().hasAny(["authorId"]) || request.resource.data.authorId == request.auth.uid)
+          && (request.resource.data.text is string)
           && (request.resource.data.text.size() <= 2000)
           && (!request.resource.data.keys().hasAny(["viewCount", "likes", "reposts", "commentsCount"])
               || ( (request.resource.data.viewCount == 0)
@@ -142,8 +145,12 @@ service cloud.firestore {
       allow create: if isAuthenticated()
           && request.resource.data.participants is list
           && request.resource.data.participants.size() >= 2
-          && (request.auth.uid in request.resource.data.participants);
-      allow update: if false;
+          && request.resource.data.participants.size() <= 50
+          && (request.auth.uid in request.resource.data.participants)
+          && request.resource.data.participants.all(p, p is string && p.size() > 0);
+      allow update: if isAuthenticated()
+          && (request.auth.uid in resource.data.participants)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["participants", "createdAt", "creatorId"]);
 
       match /messages/{msgId} {
         allow read: if isAuthenticated()
