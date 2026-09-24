@@ -629,4 +629,101 @@ export const voteOnPollCallable = onCall(async (request) => {
   });
 });
 
+/**
+ * HTTPS Callable: createChatThread
+ * Creates a direct chat thread between request.auth.uid and a recipient.
+ * Verifies that the target recipient exists in Firestore /users collection.
+ */
+export const createChatThread = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to create a chat thread.");
+  }
+
+  const { recipientUid } = request.data as { recipientUid: string };
+  if (!recipientUid || typeof recipientUid !== "string" || recipientUid.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "recipientUid must be a non-empty string.");
+  }
+
+  const currentUid = request.auth.uid;
+  if (currentUid === recipientUid) {
+    throw new HttpsError("invalid-argument", "Cannot create a chat with yourself.");
+  }
+
+  // Verify recipient user document exists
+  const recipientSnap = await db.collection("users").doc(recipientUid).get();
+  if (!recipientSnap.exists) {
+    throw new HttpsError("not-found", "Recipient user does not exist.");
+  }
+
+  // Generate deterministic chatId for 1-on-1 direct chat
+  const sortedUids = [currentUid, recipientUid].sort();
+  const chatId = `dm_${sortedUids[0]}_${sortedUids[1]}`;
+  const chatRef = db.collection("chats").doc(chatId);
+
+  const existingChat = await chatRef.get();
+  if (!existingChat.exists) {
+    await chatRef.set({
+      id: chatId,
+      participants: sortedUids,
+      creatorId: currentUid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastMessage: "",
+      unreadCount: {
+        [currentUid]: 0,
+        [recipientUid]: 0,
+      },
+    });
+  }
+
+  return { success: true, chatId };
+});
+
+/**
+ * HTTPS Callable: submitBugReportCallable
+ * Rate-limited server endpoint for bug report submissions.
+ */
+const bugReportRates = new Map<string, number[]>();
+
+export const submitBugReportCallable = onCall(async (request) => {
+  const callerId = request.auth?.uid || request.rawRequest.ip || "unknown-client";
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // 15 minutes window
+  const maxSubmissions = 5;
+
+  const timestamps = (bugReportRates.get(callerId) || []).filter((t) => now - t < windowMs);
+  if (timestamps.length >= maxSubmissions) {
+    throw new HttpsError(
+      "resource-exhausted",
+      "Too many bug report submissions. Please wait 15 minutes before trying again."
+    );
+  }
+  timestamps.push(now);
+  bugReportRates.set(callerId, timestamps);
+
+  const { title, description, text, category, platform } = request.data || {};
+  const reportText = (text || description || title || "").trim();
+
+  if (!reportText || reportText.length === 0 || reportText.length > 2000) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Bug report text/description must be non-empty and under 2000 characters."
+    );
+  }
+
+  const reportRef = db.collection("bug_reports").doc();
+  await reportRef.set({
+    id: reportRef.id,
+    title: (title || "").trim().slice(0, 200),
+    description: reportText.slice(0, 2000),
+    category: (category || "Other").trim().slice(0, 50),
+    platform: (platform || "unknown").trim().slice(0, 50),
+    reporterId: request.auth?.uid || null,
+    status: "OPEN",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, reportId: reportRef.id };
+});
+
 
