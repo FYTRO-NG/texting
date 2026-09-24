@@ -27,35 +27,25 @@ export interface WhisperMessage {
   createdAt?: any;
 }
 
-/** Send an anonymous whisper message to a specific handle in Firestore */
+import { functions } from "../firebase";
+import { httpsCallable } from "firebase/functions";
+
+/** Send an anonymous whisper message securely via server Cloud Function */
 export const sendWhisperInFirestore = async (
   recipientHandle: string,
   text: string,
   mood?: string | null
 ): Promise<boolean> => {
   try {
-    const cleanHandle = recipientHandle.replace(/^@/, "").trim().toLowerCase();
-    let recipientUid: string | null = null;
-    
-    try {
-      recipientUid = await getUidByUsername(cleanHandle);
-    } catch (_) {}
-
-    const whispersRef = collection(db, "whispers");
-    await addDoc(whispersRef, {
-      recipientId: recipientUid || null,
-      recipientUid: recipientUid || null,
-      recipientHandle: cleanHandle,
+    const callable = httpsCallable(functions, "sendAnonymousWhisper");
+    const res: any = await callable({
+      recipientHandle,
       text,
-      isAnonymous: true,
-      mood: mood || null,
-      unread: true,
-      reactions: 0,
-      createdAt: serverTimestamp(),
+      mood: mood || undefined,
     });
-    return true;
+    return Boolean(res.data?.success);
   } catch (err) {
-    console.error("Failed to send whisper in Firestore:", err);
+    console.error("Failed to send whisper via Cloud Function:", err);
     return false;
   }
 };

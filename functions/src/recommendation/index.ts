@@ -3,6 +3,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { extractHashtags, normalizeHashtag } from "./hashtags";
@@ -15,7 +16,7 @@ import {
   UserInterestProfile,
 } from "./types";
 
-const db = admin.firestore("private-voices");
+const db = getFirestore("private-voices");
 
 /**
  * Trigger: On Post Created -> Extract and index normalized hashtags

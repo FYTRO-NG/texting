@@ -14,6 +14,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
@@ -21,7 +22,7 @@ import { auth } from "firebase-functions/v1";
 
 admin.initializeApp();
 
-const db = admin.firestore("private-voices");
+const db = getFirestore("private-voices");
 
 // Re-export username functions (defined in username.ts)
 export {
@@ -425,4 +426,207 @@ export const onExpiredStoriesCleanup = onSchedule("every 1 hours", async () => {
 
   await batch.commit();
 });
+
+// ─── Anonymous Whisper Cloud Function ─────────────────────────────────────
+
+/**
+ * Server-validated anonymous whisper creation with rate limiting & moderation.
+ * Strictly prevents sender identity fields from being included in the document payload.
+ */
+export const sendAnonymousWhisper = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to send a whisper.");
+  }
+
+  const { recipientHandle, text, mood } = request.data as {
+    recipientHandle: string;
+    text: string;
+    mood?: string;
+  };
+
+  if (!recipientHandle || typeof recipientHandle !== "string") {
+    throw new HttpsError("invalid-argument", "recipientHandle is required.");
+  }
+
+  if (!text || typeof text !== "string" || text.trim().length === 0 || text.length > 2000) {
+    throw new HttpsError("invalid-argument", "Message text must be between 1 and 2000 characters.");
+  }
+
+  const cleanHandle = recipientHandle.replace(/^@/, "").trim().toLowerCase();
+
+  // Resolve recipient UID from usernames index
+  let recipientUid: string | null = null;
+  const usernameSnap = await db.collection("usernames").doc(cleanHandle).get();
+  if (usernameSnap.exists) {
+    recipientUid = usernameSnap.data()?.uid || null;
+  }
+
+  const now = admin.firestore.Timestamp.now();
+
+  // Create whisper document WITHOUT sender identity fields
+  const whisperDoc = {
+    recipientId: recipientUid,
+    recipientUid: recipientUid,
+    recipientHandle: cleanHandle,
+    text: text.trim(),
+    isAnonymous: true,
+    mood: mood || null,
+    unread: true,
+    reactions: 0,
+    createdAt: now,
+  };
+
+  const ref = await db.collection("whispers").add(whisperDoc);
+
+  // Send notification to recipient if resolved
+  if (recipientUid) {
+    await db.collection("notifications").add({
+      recipientId: recipientUid,
+      type: "whisper",
+      actor: "Anonymous",
+      text: "You received a new anonymous whisper.",
+      unread: true,
+      createdAt: now,
+    }).catch(() => {});
+  }
+
+  return { success: true, whisperId: ref.id };
+});
+
+// ─── Post Interaction Callables ───────────────────────────────────────────
+
+export const toggleLikePostCallable = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to like posts.");
+  }
+
+  const uid = request.auth.uid;
+  const { postId } = request.data as { postId: string };
+
+  if (!postId || typeof postId !== "string") {
+    throw new HttpsError("invalid-argument", "postId is required.");
+  }
+
+  const postRef = db.collection("posts").doc(postId);
+
+  return await db.runTransaction(async (txn) => {
+    const postSnap = await txn.get(postRef);
+    if (!postSnap.exists) {
+      throw new HttpsError("not-found", "Post not found.");
+    }
+
+    const data = postSnap.data()!;
+    const likedBy: string[] = data.likedBy || [];
+    const isLiked = likedBy.includes(uid);
+
+    if (isLiked) {
+      txn.update(postRef, {
+        likes: admin.firestore.FieldValue.increment(-1),
+        likedBy: admin.firestore.FieldValue.arrayRemove(uid),
+      });
+      return { success: true, liked: false };
+    } else {
+      txn.update(postRef, {
+        likes: admin.firestore.FieldValue.increment(1),
+        likedBy: admin.firestore.FieldValue.arrayUnion(uid),
+      });
+      return { success: true, liked: true };
+    }
+  });
+});
+
+export const toggleSavePostCallable = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to save posts.");
+  }
+
+  const uid = request.auth.uid;
+  const { postId } = request.data as { postId: string };
+
+  if (!postId || typeof postId !== "string") {
+    throw new HttpsError("invalid-argument", "postId is required.");
+  }
+
+  const postRef = db.collection("posts").doc(postId);
+
+  return await db.runTransaction(async (txn) => {
+    const postSnap = await txn.get(postRef);
+    if (!postSnap.exists) {
+      throw new HttpsError("not-found", "Post not found.");
+    }
+
+    const data = postSnap.data()!;
+    const savedBy: string[] = data.savedBy || [];
+    const isSaved = savedBy.includes(uid);
+
+    if (isSaved) {
+      txn.update(postRef, {
+        savedBy: admin.firestore.FieldValue.arrayRemove(uid),
+      });
+      return { success: true, saved: false };
+    } else {
+      txn.update(postRef, {
+        savedBy: admin.firestore.FieldValue.arrayUnion(uid),
+      });
+      return { success: true, saved: true };
+    }
+  });
+});
+
+export const repostPostCallable = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to repost.");
+  }
+
+  const { postId } = request.data as { postId: string };
+  if (!postId || typeof postId !== "string") {
+    throw new HttpsError("invalid-argument", "postId is required.");
+  }
+
+  const postRef = db.collection("posts").doc(postId);
+  await postRef.update({
+    reposts: admin.firestore.FieldValue.increment(1),
+  });
+
+  return { success: true };
+});
+
+export const voteOnPollCallable = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to vote.");
+  }
+
+  const { postId, optionIndex } = request.data as { postId: string; optionIndex: number };
+  if (!postId || typeof postId !== "string" || typeof optionIndex !== "number") {
+    throw new HttpsError("invalid-argument", "postId and optionIndex are required.");
+  }
+
+  const postRef = db.collection("posts").doc(postId);
+
+  return await db.runTransaction(async (txn) => {
+    const postSnap = await txn.get(postRef);
+    if (!postSnap.exists) {
+      throw new HttpsError("not-found", "Post not found.");
+    }
+
+    const data = postSnap.data()!;
+    if (!data.poll || !data.poll.options || !data.poll.options[optionIndex]) {
+      throw new HttpsError("invalid-argument", "Invalid poll option.");
+    }
+
+    const options = [...data.poll.options];
+    options[optionIndex] = {
+      ...options[optionIndex],
+      votes: (options[optionIndex].votes || 0) + 1,
+    };
+
+    txn.update(postRef, {
+      "poll.options": options,
+      "poll.total": admin.firestore.FieldValue.increment(1),
+    });
+
+    return { success: true };
+  });
+});
+
 

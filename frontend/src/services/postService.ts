@@ -88,16 +88,25 @@ export const createPostInFirestore = async (postData: CreatePostInput) => {
   return docRef;
 };
 
+import { functions } from "../firebase";
+import { httpsCallable } from "firebase/functions";
+
 export const toggleLikePost = async (postId: string, userId: string, isLiked: boolean) => {
-  const ref = doc(db, "posts", postId);
-  if (isLiked) { await updateDoc(ref, { likes: increment(-1), likedBy: arrayRemove(userId) }); }
-  else { await updateDoc(ref, { likes: increment(1), likedBy: arrayUnion(userId) }); }
+  try {
+    const callable = httpsCallable(functions, "toggleLikePostCallable");
+    await callable({ postId });
+  } catch (e) {
+    console.warn("toggleLikePost error:", e);
+  }
 };
 
 export const voteOnPollInFirestore = async (postId: string, optionIndex: number, currentPoll: any) => {
-  const opts = [...currentPoll.options];
-  opts[optionIndex] = { ...opts[optionIndex], votes: opts[optionIndex].votes + 1 };
-  await updateDoc(doc(db, "posts", postId), { "poll.options": opts, "poll.total": increment(1) });
+  try {
+    const callable = httpsCallable(functions, "voteOnPollCallable");
+    await callable({ postId, optionIndex });
+  } catch (e) {
+    console.warn("voteOnPoll error:", e);
+  }
 };
 
 export const subscribeToComments = (postId: string, callback: (comments: any[]) => void) => {
@@ -110,16 +119,25 @@ export const subscribeToComments = (postId: string, callback: (comments: any[]) 
 
 export const addCommentToFirestore = async (postId: string, commentData: { username: string; avatarColor: [string, string]; avatarIcon: string; text: string; isOp?: boolean }) => {
   await addDoc(collection(db, "posts", postId, "comments"), { ...commentData, likes: 0, createdAt: serverTimestamp() });
-  await updateDoc(doc(db, "posts", postId), { commentsCount: increment(1) });
 };
 
 export const toggleSavePost = async (postId: string, userId: string, isSaved: boolean) => {
-  const ref = doc(db, "posts", postId);
-  if (isSaved) { await updateDoc(ref, { savedBy: arrayRemove(userId) }); }
-  else { await updateDoc(ref, { savedBy: arrayUnion(userId) }); }
+  try {
+    const callable = httpsCallable(functions, "toggleSavePostCallable");
+    await callable({ postId });
+  } catch (e) {
+    console.warn("toggleSavePost error:", e);
+  }
 };
 
-export const repostPostInFirestore = async (postId: string) => { await updateDoc(doc(db, "posts", postId), { reposts: increment(1) }); };
+export const repostPostInFirestore = async (postId: string) => {
+  try {
+    const callable = httpsCallable(functions, "repostPostCallable");
+    await callable({ postId });
+  } catch (e) {
+    console.warn("repostPost error:", e);
+  }
+};
 
 export const reportPostInFirestore = async (postId: string, userId: string, reason: string) => {
   await addDoc(collection(db, "reports"), { postId, userId, reason, createdAt: serverTimestamp() });

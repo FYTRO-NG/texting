@@ -10,9 +10,10 @@
  */
 
 import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-const db = admin.firestore("private-voices");
+const db = getFirestore("private-voices");
 
 // ─── Reserved Slugs ─────────────────────────────────────────────────────────────
 const RESERVED_SLUGS = new Set([
