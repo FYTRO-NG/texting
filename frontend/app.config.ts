@@ -1,4 +1,4 @@
-﻿import { ExpoConfig, ConfigContext } from "expo/config";
+import { ExpoConfig, ConfigContext } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -36,7 +36,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         image: "./assets/images/splash-image.png",
         imageWidth: 200,
         resizeMode: "contain",
-        backgroundColor: "#0F172A",
+        backgroundColor: "#080614",
       },
     ],
     [
