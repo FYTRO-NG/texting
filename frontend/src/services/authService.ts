@@ -129,8 +129,8 @@ export const ensureUserProfile = async (user: User): Promise<UserProfile> => {
       name: e?.name,
       code: e?.code,
       message: e?.message,
-      details: e?.details,
       path: `users/${user.uid}`,
+      databaseId: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices",
     });
     throw new Error(
       e?.message || "Failed to synchronize user profile. Please check your internet connection."
@@ -143,8 +143,27 @@ export const registerWithEmail = async (
   password: string,
   username: string
 ): Promise<User> => {
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
-  const user = credential.user;
+  let user: User;
+
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    user = credential.user;
+  } catch (err: any) {
+    // Handle orphan account recovery: if email already exists in Auth, try sign in & profile repair
+    if (err?.code === "auth/email-already-in-use") {
+      try {
+        console.log("ℹ️ Email already exists in Auth, attempting sign-in & profile sync...");
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        user = cred.user;
+        await ensureUserProfile(user);
+        return user;
+      } catch (_) {
+        // Sign in with password failed — throw original email-in-use error
+        throw err;
+      }
+    }
+    throw err;
+  }
 
   // Set display name on the Firebase Auth profile
   try {
@@ -153,43 +172,55 @@ export const registerWithEmail = async (
     console.warn("Could not update profile displayName:", e);
   }
 
-  // Create Firestore user document with zero-initialized social counters
-  const profile: UserProfile = {
-    uid: user.uid,
-    username,
-    displayName: username,
-    email,
-    avatarIcon: "person",
-    avatarGradient: ["#8B5CF6", "#06B6D4"],
-    themeColor: "#8B5CF6",
-    bio: "",
-    reputationScore: 100,
-    followersCount: 0,
-    followingCount: 0,
-    postsCount: 0,
-    privacy: {
-      anonymousMessagesEnabled: true,
-    },
-    joinedAt: serverTimestamp(),
-  };
-
+  // Check if profile was already initialized by Cloud Function (onUserCreate)
+  const userRef = doc(db, "users", user.uid);
   try {
-    console.log(
-      "🔥 CONFIGURED FIRESTORE DATABASE ID:",
-      process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices"
-    );
-    await setDoc(doc(db, "users", user.uid), profile);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      // Document exists from onUserCreate — update profile fields safely without touching immutable fields
+      await updateDoc(userRef, {
+        username,
+        displayName: username,
+        email,
+      });
+    } else {
+      // Create fresh user profile document
+      const profile: UserProfile = {
+        uid: user.uid,
+        username,
+        displayName: username,
+        email,
+        avatarIcon: "person",
+        avatarGradient: ["#8B5CF6", "#06B6D4"],
+        themeColor: "#8B5CF6",
+        bio: "",
+        reputationScore: 100,
+        followersCount: 0,
+        followingCount: 0,
+        postsCount: 0,
+        privacy: {
+          anonymousMessagesEnabled: true,
+        },
+        joinedAt: serverTimestamp(),
+      };
+      await setDoc(userRef, profile);
+    }
   } catch (e: any) {
     console.error("🚨 FIRESTORE REGISTRATION WRITE ERROR:", {
       name: e?.name,
       code: e?.code,
       message: e?.message,
-      details: e?.details,
       path: `users/${user.uid}`,
+      databaseId: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices",
     });
-    throw new Error(
-      "Account created, but profile setup failed. Please check your network connection and try again."
-    );
+    // Safely attempt repair via ensureUserProfile fallback
+    try {
+      await ensureUserProfile(user);
+    } catch (_) {
+      throw new Error(
+        "Account created, but profile setup failed: " + (e?.message || "Permission denied")
+      );
+    }
   }
 
   return user;
@@ -202,10 +233,19 @@ export const loginWithEmail = async (
   email: string,
   password: string
 ): Promise<User> => {
-  const credential = await signInWithEmailAndPassword(auth, email, password);
-  // Repair orphan Auth account if profile is missing
-  await ensureUserProfile(credential.user);
-  return credential.user;
+  try {
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    // Ensure Firestore profile exists and repair if orphan
+    await ensureUserProfile(credential.user);
+    return credential.user;
+  } catch (e: any) {
+    console.error("🚨 LOGIN / PROFILE FETCH ERROR:", {
+      code: e?.code,
+      message: e?.message,
+      databaseId: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices",
+    });
+    throw e;
+  }
 };
 
 // ─── Google Sign-In (Web popup) ───────────────────────────────────────────────
