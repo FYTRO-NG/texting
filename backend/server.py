@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 # Database and Security
 from database import connect_to_mongo, close_mongo_connection, db
@@ -12,6 +13,7 @@ import routes_auth
 import routes_posts
 import routes_social
 import routes_features
+import routes_media
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -60,8 +62,14 @@ api_router.include_router(routes_social.router_users)
 api_router.include_router(routes_features.router_stories)
 api_router.include_router(routes_features.router_communities)
 api_router.include_router(routes_features.router_chats)
+api_router.include_router(routes_media.router)
 
 app.include_router(api_router)
+
+# Mount /uploads for static media serving
+uploads_path = Path(__file__).parent / "uploads"
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
 
 # CORS setup
 app.add_middleware(

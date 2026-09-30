@@ -1,12 +1,77 @@
 import { storage } from "../firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { PostImage } from "./postService";
+import { getAuthToken } from "./apiClient";
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "https://private-voices-api.onrender.com/api";
+
+export const uploadMediaToFastAPI = async (
+  uri: string,
+  filename = "upload.jpg"
+): Promise<string | null> => {
+  try {
+    const formData = new FormData();
+    const token = await getAuthToken();
+
+    // Support web data URIs and native file URIs
+    if (uri.startsWith("data:")) {
+      const arr = uri.split(",");
+      const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+      formData.append("file", blob, filename);
+    } else {
+      formData.append("file", {
+        uri,
+        name: filename,
+        type: "image/jpeg",
+      } as any);
+    }
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/media/upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.url) return data.url;
+    }
+    return null;
+  } catch (err) {
+    console.warn("FastAPI media upload error, falling back:", err);
+    return null;
+  }
+};
 
 export const uploadMediaToFirebase = async (
   uri: string,
   path: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
+  // Try uploading to our FastAPI backend first
+  try {
+    const filename = path.split("/").pop() || "upload.jpg";
+    const fastApiUrl = await uploadMediaToFastAPI(uri, filename);
+    if (fastApiUrl) {
+      if (onProgress) onProgress(100);
+      return fastApiUrl;
+    }
+  } catch (e) {
+    console.warn("FastAPI upload fallback to Firebase Storage:", e);
+  }
+
   let blob: Blob;
   
   if (uri.startsWith("data:")) {
