@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:8000/api";
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "https://private-voices-api.onrender.com/api";
 const TOKEN_KEY = "@pv_auth_token";
 
 export async function getAuthToken(): Promise<string | null> {
