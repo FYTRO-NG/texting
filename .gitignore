@@ -32,7 +32,9 @@ dist
 functions/lib/
 
 # Environment files (comprehensive coverage)
-
+.env
+.env.*
+*.env
 *token.json*
 *credentials.json*
 
