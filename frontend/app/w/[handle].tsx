@@ -73,7 +73,19 @@ export default function WhisperSend() {
       await createModerationEventInFirestore(`msg_${Date.now()}`, "anonymous_message", result);
     } else {
       // Allow -> Write whisper to Firestore
-      await sendWhisperInFirestore(displayHandle, message.trim(), mood);
+      const ok = await sendWhisperInFirestore(displayHandle, message.trim(), mood);
+      if (!ok) {
+        setModerationResult({
+          decision: "BLOCK",
+          riskLevel: "HIGH",
+          categories: ["network_error"],
+          confidence: 1.0,
+          reason: "Delivery failed",
+          action: "Block delivery",
+        });
+        setSent(true);
+        return;
+      }
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

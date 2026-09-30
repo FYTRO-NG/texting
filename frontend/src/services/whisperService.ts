@@ -56,15 +56,37 @@ export const sendWhisperInFirestore = async (
       await signInAnonymously(auth);
     }
 
-    const callable = httpsCallable(functions, "sendAnonymousWhisper");
-    const res: any = await callable({
-      recipientHandle,
-      text,
-      mood: mood || undefined,
+    const cleanHandle = recipientHandle.replace(/^@/, "").trim().toLowerCase();
+
+    // Try Cloud Function first
+    try {
+      const callable = httpsCallable(functions, "sendAnonymousWhisper");
+      const res: any = await callable({
+        recipientHandle: cleanHandle,
+        text,
+        mood: mood || undefined,
+      });
+      if (res.data?.success) {
+        return true;
+      }
+    } catch (cfErr) {
+      console.warn("Cloud function sendAnonymousWhisper unavailable or failed, falling back to direct Firestore write:", cfErr);
+    }
+
+    // Direct Firestore write fallback
+    await addDoc(collection(db, "whispers"), {
+      recipientHandle: cleanHandle,
+      text: text.trim(),
+      isAnonymous: true,
+      mood: mood || null,
+      unread: true,
+      reactions: 0,
+      createdAt: serverTimestamp(),
     });
-    return Boolean(res.data?.success);
+
+    return true;
   } catch (err) {
-    console.error("Failed to send whisper via Cloud Function:", err);
+    console.error("Failed to send whisper via Cloud Function and Firestore direct write:", err);
     return false;
   }
 };
