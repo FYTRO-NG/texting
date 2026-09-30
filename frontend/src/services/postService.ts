@@ -1,4 +1,5 @@
 import { db, auth } from "../firebase";
+import { apiRequest } from "./apiClient";
 import {
   collection,
   addDoc,
@@ -85,8 +86,24 @@ export const createPostInFirestore = async (postData: CreatePostInput) => {
   if (images && images.length > 0) { firestoreDoc.images = images; firestoreDoc.image = images[0].url; }
   const cleanDoc: Record<string, any> = {};
   Object.entries(firestoreDoc).forEach(([k, v]) => { if (v !== undefined) cleanDoc[k] = v; });
-  const docRef = await addDoc(collection(db, "posts"), cleanDoc);
-  try { await updateDoc(doc(db, "users", userId), { postsCount: increment(1) }); } catch (e) { console.warn("postsCount increment:", e); }
+  // Dual-write to FastAPI MongoDB backend
+  try {
+    await apiRequest("/posts", {
+      method: "POST",
+      body: JSON.stringify({
+        text: postData.text,
+        community: postData.community,
+        communityEmoji: postData.communityEmoji,
+        images: postData.images || [],
+        poll: postData.poll,
+        replyPermission: postData.replyPermission,
+        visibility: postData.visibility
+      }),
+    });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB post creation sync:", backendErr);
+  }
+
   return docRef;
 };
 
@@ -94,6 +111,13 @@ import { functions } from "../firebase";
 import { httpsCallable } from "firebase/functions";
 
 export const toggleLikePost = async (postId: string, userId: string, isLiked: boolean) => {
+  // Sync like with FastAPI backend
+  try {
+    await apiRequest(`/posts/${postId}/like`, { method: "POST" });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB like sync:", backendErr);
+  }
+
   try {
     const callable = httpsCallable(functions, "toggleLikePostCallable");
     await callable({ postId });

@@ -14,6 +14,7 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } from "fir
 import { useEffect, useState } from "react";
 
 import { auth, db } from "../firebase";
+import { apiRequest, setAuthToken, clearAuthToken } from "./apiClient";
 
 export { auth, db };
 
@@ -174,7 +175,18 @@ export const registerWithEmail = async (
     console.warn("Could not update profile displayName:", e);
   }
 
-  // Check if profile was already initialized by Cloud Function (onUserCreate)
+  // Dual-Write to FastAPI + MongoDB backend
+  try {
+    const apiRes = await apiRequest("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password, username }),
+    });
+    if (apiRes.data?.access_token) {
+      await setAuthToken(apiRes.data.access_token);
+    }
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB registration sync:", backendErr);
+  }
   const userRef = doc(db, "users", user.uid);
   try {
     const snap = await getDoc(userRef);
@@ -235,6 +247,19 @@ export const loginWithEmail = async (
   email: string,
   password: string
 ): Promise<User> => {
+  // Sync login with FastAPI backend
+  try {
+    const apiRes = await apiRequest("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    if (apiRes.data?.access_token) {
+      await setAuthToken(apiRes.data.access_token);
+    }
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB login sync:", backendErr);
+  }
+
   try {
     const credential = await signInWithEmailAndPassword(auth, email, password);
     // Ensure Firestore profile exists and repair if orphan
