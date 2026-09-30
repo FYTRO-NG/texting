@@ -31,11 +31,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Private Voices API", lifespan=lifespan)
 
+@app.get("/")
+async def root():
+    return {
+        "service": "Private Voices API",
+        "status": "online",
+        "api_docs": "/docs",
+        "database": "MongoDB Atlas" if os.environ.get("MONGO_URL") else "local"
+    }
+
 # Main API Router
 api_router = APIRouter(prefix="/api")
 
 @api_router.get("/")
-async def root():
+async def api_root():
     return {
         "service": "Private Voices API",
         "status": "online",

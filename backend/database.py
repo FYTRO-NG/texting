@@ -3,6 +3,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING, DESCENDING
 import logging
 
+import certifi
+
 logger = logging.getLogger(__name__)
 
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
@@ -15,7 +17,15 @@ async def connect_to_mongo():
     global client, db
     try:
         logger.info(f"Connecting to MongoDB at {MONGO_URL.split('@')[-1]}...")
-        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+        
+        # Use certifi CA file when connecting via SSL/TLS
+        client_kwargs = {
+            "serverSelectionTimeoutMS": 10000,
+        }
+        if "mongodb+srv://" in MONGO_URL or "ssl=true" in MONGO_URL.lower():
+            client_kwargs["tlsCAFile"] = certifi.where()
+
+        client = AsyncIOMotorClient(MONGO_URL, **client_kwargs)
         db = client[DB_NAME]
         
         # Verify connection
