@@ -132,3 +132,27 @@ class CommunityOut(BaseModel):
     gradient: List[str]
     joined: bool = False
 
+# --- Chat Models ---
+class ChatMessageCreate(BaseModel):
+    text: str
+
+class ChatMessageOut(BaseModel):
+    id: str
+    senderId: str
+    text: str
+    time: str
+    fromMe: bool = False
+    createdAt: Optional[str] = None
+
+class ChatThreadOut(BaseModel):
+    id: str
+    nickname: str
+    avatarColor: List[str]
+    avatarIcon: str
+    lastMessage: str
+    time: str
+    unread: int = 0
+    online: bool = True
+    otherUserId: str
+
+

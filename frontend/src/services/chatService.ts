@@ -1,4 +1,5 @@
 import { db, auth } from "../firebase";
+import { apiRequest } from "./apiClient";
 import {
   collection,
   addDoc,
@@ -118,4 +119,14 @@ export const sendMessageInFirestore = async (
     },
     { merge: true }
   );
+
+  // Dual-write message to FastAPI MongoDB backend
+  try {
+    await apiRequest(`/chats/${chatId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB chat message sync:", backendErr);
+  }
 };

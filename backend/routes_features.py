@@ -3,11 +3,12 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import uuid
 import database
-from schemas import StoryCreate, StoryOut, CommunityCreate, CommunityOut
+from schemas import StoryCreate, StoryOut, CommunityCreate, CommunityOut, ChatMessageCreate, ChatMessageOut, ChatThreadOut
 from security import get_current_user, get_optional_user
 
 router_stories = APIRouter(prefix="/stories", tags=["stories"])
 router_communities = APIRouter(prefix="/communities", tags=["communities"])
+router_chats = APIRouter(prefix="/chats", tags=["chats"])
 
 # ─── Stories Endpoints ─────────────────────────────────────────────────────────
 
@@ -289,3 +290,138 @@ async def toggle_join_community(
             {"$inc": {"members": 1}}
         )
         return {"joined": True}
+
+
+# ─── Chat / Direct Message Endpoints ──────────────────────────────────────────
+
+@router_chats.get("", response_model=List[ChatThreadOut])
+async def get_user_chat_threads(current_user: dict = Depends(get_current_user)):
+    """
+    List user's active direct message threads.
+    """
+    if database.db is None:
+        return []
+
+    uid = current_user.get("uid") or current_user.get("_id")
+    cursor = database.db.chats.find({"participants": uid}).sort("updatedAt", -1).limit(50)
+    docs = await cursor.to_list(length=50)
+
+    results = []
+    for d in docs:
+        details = d.get("participantDetails", [])
+        other = next((p for p in details if p.get("uid") != uid), None)
+        other_uid = other.get("uid") if other else next((p for p in d.get("participants", []) if p != uid), "")
+
+        created = d.get("updatedAt")
+        time_str = "Just now"
+        if isinstance(created, datetime):
+            diff = (datetime.utcnow() - created).total_seconds()
+            if diff < 60:
+                time_str = "Just now"
+            elif diff < 3600:
+                time_str = f"{int(diff // 60)}m"
+            else:
+                time_str = f"{int(diff // 86400)}d"
+
+        results.append(ChatThreadOut(
+            id=str(d.get("_id") or d.get("id")),
+            nickname=other.get("nickname", "Anonymous Voice") if other else "Anonymous Voice",
+            avatarColor=other.get("avatarColor", ["#06B6D4", "#0284C7"]) if other else ["#06B6D4", "#0284C7"],
+            avatarIcon=other.get("avatarIcon", "flash") if other else "flash",
+            lastMessage=d.get("lastMessage", ""),
+            time=time_str,
+            unread=d.get("unreadCount", {}).get(uid, 0),
+            online=True,
+            otherUserId=other_uid
+        ))
+
+    return results
+
+@router_chats.get("/{chat_id}/messages", response_model=List[ChatMessageOut])
+async def get_chat_messages(
+    chat_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Fetch message history for a conversation.
+    """
+    if database.db is None:
+        return []
+
+    uid = current_user.get("uid") or current_user.get("_id")
+    cursor = database.db.messages.find({"chatId": chat_id}).sort("createdAt", 1).limit(100)
+    docs = await cursor.to_list(length=100)
+
+    results = []
+    for d in docs:
+        created = d.get("createdAt")
+        time_str = "Just now"
+        if isinstance(created, datetime):
+            diff = (datetime.utcnow() - created).total_seconds()
+            if diff < 60:
+                time_str = "Just now"
+            elif diff < 3600:
+                time_str = f"{int(diff // 60)}m"
+            else:
+                time_str = f"{int(diff // 86400)}d"
+
+        results.append(ChatMessageOut(
+            id=str(d.get("_id") or d.get("id")),
+            senderId=d.get("senderId", ""),
+            text=d.get("text", ""),
+            time=time_str,
+            fromMe=d.get("senderId") == uid,
+            createdAt=created.isoformat() if isinstance(created, datetime) else None
+        ))
+
+    return results
+
+@router_chats.post("/{chat_id}/messages", response_model=ChatMessageOut)
+async def send_chat_message(
+    chat_id: str,
+    input_data: ChatMessageCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Send a direct message in a conversation.
+    """
+    if database.db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    uid = current_user.get("uid") or current_user.get("_id")
+    text = input_data.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    msg_id = str(uuid.uuid4())
+    now = datetime.utcnow()
+
+    msg_doc = {
+        "_id": msg_id,
+        "id": msg_id,
+        "chatId": chat_id,
+        "senderId": uid,
+        "text": text,
+        "createdAt": now
+    }
+    await database.db.messages.insert_one(msg_doc)
+
+    # Update thread's lastMessage and updatedAt
+    await database.db.chats.update_one(
+        {"_id": chat_id},
+        {
+            "$set": {"lastMessage": text, "updatedAt": now},
+            "$addToSet": {"participants": uid}
+        },
+        upsert=True
+    )
+
+    return ChatMessageOut(
+        id=msg_id,
+        senderId=uid,
+        text=text,
+        time="Just now",
+        fromMe=True,
+        createdAt=now.isoformat()
+    )
+

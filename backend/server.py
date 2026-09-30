@@ -59,6 +59,7 @@ api_router.include_router(routes_social.router_whispers)
 api_router.include_router(routes_social.router_users)
 api_router.include_router(routes_features.router_stories)
 api_router.include_router(routes_features.router_communities)
+api_router.include_router(routes_features.router_chats)
 
 app.include_router(api_router)
 
