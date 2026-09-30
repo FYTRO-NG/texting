@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions, auth } from "../firebase";
+import { apiRequest } from "./apiClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,21 @@ export type CreateStoryResult = {
 export const callCreateStory = async (
   input: CreateStoryInput
 ): Promise<CreateStoryResult> => {
+  // Dual-write story to FastAPI MongoDB backend (24h TTL automatic expiration)
+  try {
+    await apiRequest("/stories", {
+      method: "POST",
+      body: JSON.stringify({
+        type: input.type,
+        content: input.content,
+        mediaUrl: input.mediaUrl,
+        backgroundColor: input.backgroundColor
+      }),
+    });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB story creation sync:", backendErr);
+  }
+
   const fn = httpsCallable<CreateStoryInput, CreateStoryResult>(
     functions,
     "createStory"
@@ -82,6 +98,13 @@ export type RecordStoryViewResult = {
 export const callRecordStoryView = async (
   storyId: string
 ): Promise<RecordStoryViewResult> => {
+  // Sync view count to FastAPI backend
+  try {
+    await apiRequest(`/stories/${storyId}/view`, { method: "POST" });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB story view sync:", backendErr);
+  }
+
   const fn = httpsCallable<{ storyId: string }, RecordStoryViewResult>(
     functions,
     "recordStoryView"

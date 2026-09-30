@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { Community } from "../mockData";
+import { apiRequest } from "./apiClient";
 
 export interface CommunityFull {
   id: string;
@@ -101,6 +102,20 @@ export const createCommunityInFirestore = async (data: {
     postCount: 0,
     createdAt: serverTimestamp(),
   });
+
+  // Dual-write to FastAPI MongoDB backend
+  try {
+    await apiRequest("/communities", {
+      method: "POST",
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description,
+        cover: data.coverUrl,
+      }),
+    });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB community sync:", backendErr);
+  }
 
   return { success: true, communityId };
 };

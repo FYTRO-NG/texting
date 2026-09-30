@@ -11,6 +11,7 @@ from database import connect_to_mongo, close_mongo_connection, db
 import routes_auth
 import routes_posts
 import routes_social
+import routes_features
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -56,6 +57,8 @@ api_router.include_router(routes_auth.router)
 api_router.include_router(routes_posts.router)
 api_router.include_router(routes_social.router_whispers)
 api_router.include_router(routes_social.router_users)
+api_router.include_router(routes_features.router_stories)
+api_router.include_router(routes_features.router_communities)
 
 app.include_router(api_router)
 

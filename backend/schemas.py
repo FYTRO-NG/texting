@@ -88,3 +88,47 @@ class WhisperOut(BaseModel):
 # --- Follow Models ---
 class FollowAction(BaseModel):
     targetUid: str
+
+# --- Story Models ---
+class StoryCreate(BaseModel):
+    type: str = "text"  # "text" | "image"
+    content: Optional[str] = None
+    mediaUrl: Optional[str] = None
+    backgroundColor: Optional[str] = "#8B5CF6"
+
+class StoryViewerAction(BaseModel):
+    storyId: str
+
+class StoryOut(BaseModel):
+    id: str
+    authorId: str
+    authorUsername: str
+    authorAvatarIcon: str
+    authorAvatarGradient: List[str]
+    type: str
+    content: Optional[str] = None
+    mediaUrl: Optional[str] = None
+    backgroundColor: Optional[str] = None
+    viewCount: int = 0
+    viewed: bool = False
+    createdAt: Optional[str] = None
+    expiresAt: Optional[str] = None
+
+# --- Community Models ---
+class CommunityCreate(BaseModel):
+    name: str
+    emoji: Optional[str] = "💬"
+    description: Optional[str] = ""
+    cover: Optional[str] = None
+    gradient: Optional[List[str]] = ["#8B5CF6", "#06B6D4"]
+
+class CommunityOut(BaseModel):
+    id: str
+    name: str
+    emoji: str
+    description: str
+    members: int
+    cover: Optional[str] = None
+    gradient: List[str]
+    joined: bool = False
+
