@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   FlatList,
   Platform,
@@ -17,12 +17,20 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Whisper } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 import { auth } from "@/src/firebase";
-import { subscribeToWhispers } from "@/src/services/whisperService";
+import {
+  WhisperMessage,
+  subscribeToWhispers,
+  markWhisperReadInFirestore,
+  getWhisperSettings,
+  updateWhisperSettings,
+} from "@/src/services/whisperService";
 import { useSecurity } from "@/src/contexts/SecurityContext";
 import { authenticateWithBiometrics } from "@/src/services/biometricService";
+
+// Alias so the rest of the file compiles unchanged
+type Whisper = WhisperMessage;
 
 const BASE_URL = `${process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app"}/w`;
 
@@ -85,6 +93,63 @@ export default function Whispers() {
   const { settings, biometricInfo } = useSecurity();
   const [inboxUnlocked, setInboxUnlocked] = useState(!settings.protectInbox);
 
+  // ── Real user handle ──────────────────────────────────────
+  const user = auth?.currentUser;
+  const rawHandle: string =
+    user?.displayName?.trim()
+      ? user.displayName.trim()
+      : user?.email?.split("@")[0] ?? user?.uid ?? "anonymous";
+  const handle = rawHandle.replace(/^@/, "").trim();
+  const fullLink = `${BASE_URL}/${handle}`;
+  // ─────────────────────────────────────────────────────────
+
+  // ── Load persisted whisper settings from Firestore ────────
+  useEffect(() => {
+    if (!user?.uid) return;
+    getWhisperSettings(user.uid).then((ws) => {
+      setAccepting(ws.acceptingWhispers);
+      setPrompt(ws.whisperPrompt);
+    });
+  }, [user?.uid]);
+
+  // ── Persist accepting toggle changes ──────────────────────
+  const onToggleAccepting = useCallback(
+    (v: boolean) => {
+      setAccepting(v);
+      Haptics.selectionAsync();
+      if (user?.uid) {
+        updateWhisperSettings(user.uid, { acceptingWhispers: v });
+      }
+    },
+    [user?.uid]
+  );
+
+  // ── Persist prompt changes (debounced) ────────────────────
+  const promptSaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onChangePrompt = useCallback(
+    (val: string) => {
+      setPrompt(val);
+      if (promptSaveTimer.current) clearTimeout(promptSaveTimer.current);
+      promptSaveTimer.current = setTimeout(() => {
+        if (user?.uid) {
+          updateWhisperSettings(user.uid, { whisperPrompt: val });
+        }
+      }, 800);
+    },
+    [user?.uid]
+  );
+
+  // ── Open a whisper: mark it as read ──────────────────────
+  const openWhisper = useCallback(
+    (whisperId: string) => {
+      markWhisperReadInFirestore(whisperId);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === whisperId ? { ...m, unread: false } : m))
+      );
+    },
+    []
+  );
+
   useEffect(() => {
     if (!settings.protectInbox || Platform.OS === "web") {
       setInboxUnlocked(true);
@@ -111,20 +176,10 @@ export default function Whispers() {
     };
   }, [settings.protectInbox, biometricInfo.available]);
 
-  // ── Real user handle ──────────────────────────────────────
-  const user = auth?.currentUser;
-  const rawHandle: string =
-    user?.displayName?.trim()
-      ? user.displayName.trim()
-      : user?.email?.split("@")[0] ?? user?.uid ?? "anonymous";
-  const handle = rawHandle.replace(/^@/, "").trim();
-  const fullLink = `${BASE_URL}/${handle}`;
-  // ─────────────────────────────────────────────────────────
-
   useEffect(() => {
     if (!handle) return;
     const unsub = subscribeToWhispers(handle, user?.uid, (liveWhispers) => {
-      setMessages(liveWhispers as Whisper[]);
+      setMessages(liveWhispers);
     });
     return () => unsub();
   }, [handle, user?.uid]);
@@ -244,7 +299,7 @@ export default function Whispers() {
               <Ionicons name="chatbubble-ellipses" size={14} color={colors.brand} />
               <TextInput
                 value={prompt}
-                onChangeText={setPrompt}
+                onChangeText={onChangePrompt}
                 placeholder="Set your prompt"
                 placeholderTextColor={colors.onSurfaceDim}
                 style={styles.promptInput}
@@ -389,10 +444,7 @@ export default function Whispers() {
             </View>
             <Switch
               value={accepting}
-              onValueChange={(v) => {
-                setAccepting(v);
-                Haptics.selectionAsync();
-              }}
+              onValueChange={onToggleAccepting}
               trackColor={{ false: "rgba(255,255,255,0.15)", true: colors.brand }}
               thumbColor="#FFFFFF"
               ios_backgroundColor="rgba(255,255,255,0.15)"

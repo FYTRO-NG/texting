@@ -1,24 +1,28 @@
-import { db } from "../firebase";
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  orderBy, 
-  limit, 
-  onSnapshot, 
-  serverTimestamp,
+import { db, auth, functions } from "../firebase";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
   doc,
-  updateDoc
+  updateDoc,
+  getDoc,
+  setDoc,
 } from "firebase/firestore";
-import { getUidByUsername } from "./usernameService";
+import { httpsCallable } from "firebase/functions";
+import { signInAnonymously } from "firebase/auth";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface WhisperMessage {
   id: string;
   recipientId?: string;
   recipientUid?: string;
   recipientHandle: string;
-  text: string;
+  /** The whisper body text — mapped from Firestore `text` field */
+  message: string;
   isAnonymous?: boolean;
   mood?: string | null;
   time: string;
@@ -27,16 +31,31 @@ export interface WhisperMessage {
   createdAt?: any;
 }
 
-import { functions } from "../firebase";
-import { httpsCallable } from "firebase/functions";
+export interface WhisperSettings {
+  /** Whether the owner is accepting new anonymous whispers */
+  acceptingWhispers: boolean;
+  /** Custom prompt shown on the public send page */
+  whisperPrompt: string;
+}
 
-/** Send an anonymous whisper message securely via server Cloud Function */
+// ─── Send Whisper ─────────────────────────────────────────────────────────────
+
+/**
+ * Send an anonymous whisper via the `sendAnonymousWhisper` Cloud Function.
+ * If the caller is not signed in, we sign them in anonymously first so the
+ * Cloud Function's auth check passes (the sender identity is never stored).
+ */
 export const sendWhisperInFirestore = async (
   recipientHandle: string,
   text: string,
   mood?: string | null
 ): Promise<boolean> => {
   try {
+    // Ensure Firebase Auth has a current user (even anonymous)
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+    }
+
     const callable = httpsCallable(functions, "sendAnonymousWhisper");
     const res: any = await callable({
       recipientHandle,
@@ -50,7 +69,12 @@ export const sendWhisperInFirestore = async (
   }
 };
 
-/** Live-subscribe to incoming whispers for a given recipient handle or UID */
+// ─── Subscribe to Whispers (Inbox) ────────────────────────────────────────────
+
+/**
+ * Live-subscribe to incoming whispers for a given recipient handle.
+ * Returns an unsubscribe function.
+ */
 export const subscribeToWhispers = (
   handle: string,
   uid: string | undefined,
@@ -58,8 +82,7 @@ export const subscribeToWhispers = (
 ) => {
   const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
   const whispersRef = collection(db, "whispers");
-  
-  // Query by recipientHandle (case-insensitive clean handle)
+
   const q = query(
     whispersRef,
     where("recipientHandle", "==", cleanHandle),
@@ -85,7 +108,8 @@ export const subscribeToWhispers = (
           id: docSnap.id,
           recipientHandle: data.recipientHandle,
           recipientUid: data.recipientUid,
-          text: data.text || "",
+          // Map Firestore `text` → component-facing `message`
+          message: data.text || "",
           mood: data.mood || null,
           time: timeStr,
           unread: data.unread ?? true,
@@ -101,7 +125,9 @@ export const subscribeToWhispers = (
   );
 };
 
-/** Mark a whisper message as read */
+// ─── Mark as Read ─────────────────────────────────────────────────────────────
+
+/** Mark a whisper as read by the recipient */
 export const markWhisperReadInFirestore = async (whisperId: string) => {
   try {
     const docRef = doc(db, "whispers", whisperId);
@@ -109,4 +135,54 @@ export const markWhisperReadInFirestore = async (whisperId: string) => {
   } catch (err) {
     console.warn("Failed to mark whisper as read:", err);
   }
+};
+
+// ─── Whisper Settings ─────────────────────────────────────────────────────────
+
+/**
+ * Persist whisper inbox settings (accept toggle + prompt) to the user's
+ * Firestore document under the `whisperSettings` field.
+ */
+export const updateWhisperSettings = async (
+  uid: string,
+  settings: Partial<WhisperSettings>
+): Promise<void> => {
+  try {
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, {
+      "whisperSettings.acceptingWhispers":
+        settings.acceptingWhispers !== undefined
+          ? settings.acceptingWhispers
+          : true,
+      "whisperSettings.whisperPrompt":
+        settings.whisperPrompt !== undefined
+          ? settings.whisperPrompt
+          : "Send me an anonymous whisper 🎙️",
+    });
+  } catch (err) {
+    console.warn("Failed to update whisper settings:", err);
+  }
+};
+
+/**
+ * Fetch whisper settings for a user UID.
+ * Falls back to safe defaults if the fields aren't set yet.
+ */
+export const getWhisperSettings = async (
+  uid: string
+): Promise<WhisperSettings> => {
+  try {
+    const userRef = doc(db, "users", uid);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      const ws = snap.data()?.whisperSettings;
+      return {
+        acceptingWhispers: ws?.acceptingWhispers ?? true,
+        whisperPrompt: ws?.whisperPrompt ?? "Send me an anonymous whisper 🎙️",
+      };
+    }
+  } catch (err) {
+    console.warn("Failed to fetch whisper settings:", err);
+  }
+  return { acceptingWhispers: true, whisperPrompt: "Send me an anonymous whisper 🎙️" };
 };
