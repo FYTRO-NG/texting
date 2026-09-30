@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -79,3 +80,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Expo Web App (if exported to backend/static or frontend/dist)
+STATIC_DIR = Path(__file__).parent / "static"
+if not STATIC_DIR.exists():
+    ALT_STATIC = Path(__file__).parent.parent / "frontend" / "dist"
+    if ALT_STATIC.exists():
+        STATIC_DIR = ALT_STATIC
+
+if STATIC_DIR.exists():
+    app.mount("/_expo", StaticFiles(directory=STATIC_DIR / "_expo"), name="expo")
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Don't hijack API or uploads routes
+        if full_path.startswith("api") or full_path.startswith("uploads") or full_path.startswith("docs"):
+            return None
+        file_path = STATIC_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        index_file = STATIC_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return {"service": "Private Voices API", "status": "online"}
+
