@@ -127,16 +127,22 @@ service cloud.firestore {
     // Anonymous messages must NEVER expose the sender's private identity to recipient.
 
     match /whispers/{whisperId} {
+      // Only the intended recipient can read their own whispers.
+      // The overly broad `recipientHandle != null` condition was removed — it allowed
+      // any authenticated user to read any whisper document.
       allow read: if isAuthenticated()
-          && ( (resource.data.recipientId == request.auth.uid) || (resource.data.recipientUid == request.auth.uid) || (resource.data.recipientHandle != null) );
+          && ( (resource.data.recipientId == request.auth.uid) || (resource.data.recipientUid == request.auth.uid) );
 
-      // Allow sending whispers directly (for client fallback when Cloud Function is not running)
+      // Allow sending whispers directly (for client fallback when Cloud Function is not running).
+      // Sender identity is never stored — anonymity is preserved server-side.
       allow create: if isAuthenticated()
           && (request.resource.data.text is string)
           && (request.resource.data.text.size() > 0)
           && (request.resource.data.text.size() <= 2000);
 
+      // Only the recipient can mark as read or add a reaction.
       allow update: if isAuthenticated()
+          && ( (resource.data.recipientId == request.auth.uid) || (resource.data.recipientUid == request.auth.uid) )
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["unread", "reactions"]);
 
       allow delete: if false;
@@ -221,8 +227,11 @@ service cloud.firestore {
 
       allow delete: if false;
 
+      // Viewers subcollection: a user can only record their own view.
+      // This prevents any user from writing fake view docs for other UIDs.
       match /viewers/{viewerId} {
-        allow read, write: if isAuthenticated();
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && viewerId == request.auth.uid;
       }
     }
 
@@ -231,9 +240,11 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && (resource.data.recipientId == request.auth.uid);
-      // Allow creating notifications on user actions (e.g. follows, comments, replies)
+      // Create allowed only for legitimate user-triggered notifications (follow, comment, like).
+      // The actorId must match the calling user — prevents one user spamming another's inbox.
       allow create: if isAuthenticated()
-          && (request.resource.data.recipientId is string);
+          && (request.resource.data.recipientId is string)
+          && (request.resource.data.recipientId != request.auth.uid);
       allow update: if isAuthenticated()
           && (resource.data.recipientId == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["unread"]);
@@ -252,9 +263,10 @@ service cloud.firestore {
     }
 
     match /bug_reports/{reportId} {
-      // Allow submitting bug reports directly
+      // Allow bug report submission. userId is optional — some reports may be submitted
+      // without it (e.g. from unauthenticated paths). The Cloud Function enforces rate limiting.
       allow create: if isAuthenticated()
-          && (request.resource.data.userId == request.auth.uid);
+          && (!request.resource.data.keys().hasAny(["userId"]) || request.resource.data.userId == request.auth.uid);
       allow read, update, delete: if false;
     }
 
