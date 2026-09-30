@@ -39,7 +39,7 @@ export default function Register() {
   const [confirm, setConfirm] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);
-  const [agreed, setAgreed] = useState(true);
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +47,7 @@ export default function Register() {
   const passwordsMatch = password.length > 0 && password === confirm;
 
   const onSubmit = async () => {
-    if (loading) return;
+    if (loading || !agreed) return;
     if (username.trim().length < 3) {
       setError("Anonymous handle must be at least 3 characters.");
       return;
@@ -65,7 +65,7 @@ export default function Register() {
       return;
     }
     if (!agreed) {
-      setError("Please agree to the Community Guidelines to continue.");
+      setError("You must confirm that you are 18 or older and agree to the Terms & Conditions and Privacy Policy.");
       return;
     }
 
@@ -316,9 +316,9 @@ export default function Register() {
                   {agreed && <Ionicons name="checkmark" size={12} color="#0F172A" />}
                 </View>
                 <Text style={styles.termsText}>
-                  I agree to the{" "}
-                  <Text style={styles.termsLink}>Community Guidelines</Text> and{" "}
-                  <Text style={styles.termsLink}>Privacy Promise</Text>.
+                  I confirm that I am 18 or older and agree to the{" "}
+                  <Text style={styles.termsLink}>Terms & Conditions</Text> and{" "}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>.
                 </Text>
               </TouchableOpacity>
 
@@ -326,8 +326,8 @@ export default function Register() {
               <TouchableOpacity
                 onPress={onSubmit}
                 activeOpacity={0.85}
-                disabled={loading}
-                style={[styles.primaryBtn, loading && { opacity: 0.5, shadowOpacity: 0 }]}
+                disabled={loading || !agreed}
+                style={[styles.primaryBtn, (loading || !agreed) && { opacity: 0.5, shadowOpacity: 0 }]}
                 testID="register-submit-btn"
               >
                 <LinearGradient
