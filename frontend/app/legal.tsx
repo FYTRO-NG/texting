@@ -113,7 +113,7 @@ A: Go to the Communities tab and tap "Create Community" to start your own dedica
 • Safety & Moderation: safety@privatevoices.app
 • Legal & Inquiries: legal@privatevoices.app
 
-Official Website: ${process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app"}
+Official Website: ${process.env.EXPO_PUBLIC_APP_URL || "https://private-voices-api.onrender.com"}
 
 Our support team typically responds within 24–48 hours.`,
   },

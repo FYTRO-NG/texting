@@ -35,7 +35,7 @@ import { authenticateWithBiometrics } from "@/src/services/biometricService";
 // Alias so the rest of the file compiles unchanged
 type Whisper = WhisperMessage;
 
-const BASE_URL = `${process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app"}/w`;
+const BASE_URL = `${process.env.EXPO_PUBLIC_APP_URL || "https://private-voices-api.onrender.com"}/w`;
 
 const SHARE_TARGETS = [
   { key: "whatsapp", label: "WhatsApp", icon: "logo-whatsapp", color: "#25D366" },

@@ -61,7 +61,7 @@ export default function PostCard({ post }: Props) {
   };
 
   const onShare = async () => {
-    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app";
+    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || "https://private-voices-api.onrender.com";
     const postUrl = `${baseUrl}/post/${post.id}`;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {

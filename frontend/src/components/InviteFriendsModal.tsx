@@ -32,7 +32,7 @@ const SHARE_CHANNELS = [
 export default function InviteFriendsModal({ visible, onClose }: Props) {
   const [copied, setCopied] = useState(false);
   const handle = auth.currentUser?.displayName || auth.currentUser?.email?.split("@")[0] || "ShadowFox_42";
-  const baseUrl = process.env.EXPO_PUBLIC_APP_URL || "https://privatevoices.vercel.app";
+  const baseUrl = process.env.EXPO_PUBLIC_APP_URL || "https://private-voices-api.onrender.com";
   const inviteUrl = `${baseUrl}/w/@${handle}`;
 
   const handleShare = async () => {
