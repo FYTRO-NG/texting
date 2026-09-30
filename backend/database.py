@@ -2,31 +2,41 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING, DESCENDING
 import logging
+from pathlib import Path
+from dotenv import load_dotenv
 
 import certifi
 
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
 logger = logging.getLogger(__name__)
 
-MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-DB_NAME = os.environ.get("DB_NAME", "private_voices")
+def get_mongo_url():
+    return os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+
+def get_db_name():
+    return os.environ.get("DB_NAME", "private_voices")
 
 client: AsyncIOMotorClient = None
 db = None
 
 async def connect_to_mongo():
     global client, db
+    mongo_url = get_mongo_url()
+    db_name = get_db_name()
     try:
-        logger.info(f"Connecting to MongoDB at {MONGO_URL.split('@')[-1]}...")
+        logger.info(f"Connecting to MongoDB at {mongo_url.split('@')[-1]}...")
         
         # Use certifi CA file when connecting via SSL/TLS
         client_kwargs = {
             "serverSelectionTimeoutMS": 10000,
         }
-        if "mongodb+srv://" in MONGO_URL or "ssl=true" in MONGO_URL.lower():
+        if "mongodb+srv://" in mongo_url or "ssl=true" in mongo_url.lower():
             client_kwargs["tlsCAFile"] = certifi.where()
 
-        client = AsyncIOMotorClient(MONGO_URL, **client_kwargs)
-        db = client[DB_NAME]
+        client = AsyncIOMotorClient(mongo_url, **client_kwargs)
+        db = client[db_name]
         
         # Verify connection
         await client.admin.command('ping')
@@ -41,13 +51,15 @@ async def connect_to_mongo():
 def get_database():
     global client, db
     if db is None:
+        mongo_url = get_mongo_url()
+        db_name = get_db_name()
         client_kwargs = {
             "serverSelectionTimeoutMS": 10000,
         }
-        if "mongodb+srv://" in MONGO_URL or "ssl=true" in MONGO_URL.lower():
+        if "mongodb+srv://" in mongo_url or "ssl=true" in mongo_url.lower():
             client_kwargs["tlsCAFile"] = certifi.where()
-        client = AsyncIOMotorClient(MONGO_URL, **client_kwargs)
-        db = client[DB_NAME]
+        client = AsyncIOMotorClient(mongo_url, **client_kwargs)
+        db = client[db_name]
     return db
 
 async def close_mongo_connection():

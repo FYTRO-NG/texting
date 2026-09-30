@@ -107,10 +107,17 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 @router.get("/check-username/{username}")
 async def check_username(username: str):
-    db = database.get_database()
-    if db is None:
-        raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+    try:
+        db = database.get_database()
+        if db is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
-    clean_name = username.strip().lower().replace("@", "")
-    existing = await db.users.find_one({"usernameLower": clean_name})
-    return {"available": existing is None, "username": clean_name}
+        clean_name = username.strip().lower().replace("@", "")
+        existing = await db.users.find_one({"usernameLower": clean_name})
+        return {"available": existing is None, "username": clean_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
