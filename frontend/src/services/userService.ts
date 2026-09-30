@@ -29,6 +29,7 @@ import {
 } from "firebase/storage";
 import { db, storage, functions } from "../firebase";
 import { httpsCallable } from "firebase/functions";
+import { apiRequest } from "./apiClient";
 import { createNotificationInFirestore } from "./notificationService";
 import { isUserBlockedInFirestore } from "./safetyService";
 import type { UserProfile } from "./authService";
@@ -110,6 +111,16 @@ export const followUser = async (
 
   await setDoc(followRef, relationship);
 
+  // Dual-write follow to FastAPI MongoDB backend
+  try {
+    await apiRequest("/users/follow", {
+      method: "POST",
+      body: JSON.stringify({ targetUid }),
+    });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB follow sync:", backendErr);
+  }
+
   // Notify the target user (fire-and-forget)
   createNotificationInFirestore({
     recipientId: targetUid,
@@ -155,6 +166,16 @@ export const unfollowUser = async (
 
   // Fallback: delete the follow document directly (allowed by firestore.rules)
   await deleteDoc(followRef);
+
+  // Dual-write unfollow to FastAPI MongoDB backend
+  try {
+    await apiRequest("/users/unfollow", {
+      method: "POST",
+      body: JSON.stringify({ targetUid }),
+    });
+  } catch (backendErr) {
+    console.warn("FastAPI MongoDB unfollow sync:", backendErr);
+  }
 
   return { success: true };
 };

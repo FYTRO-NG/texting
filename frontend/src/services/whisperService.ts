@@ -1,4 +1,5 @@
 import { db, auth, functions } from "../firebase";
+import { apiRequest } from "./apiClient";
 import {
   collection,
   query,
@@ -85,6 +86,20 @@ export const sendWhisperInFirestore = async (
       reactions: 0,
       createdAt: serverTimestamp(),
     });
+
+    // Dual-write to FastAPI MongoDB backend (ensures strictly anonymous persistence)
+    try {
+      await apiRequest("/whispers", {
+        method: "POST",
+        body: JSON.stringify({
+          recipientHandle: cleanHandle,
+          text: text.trim(),
+          mood: mood || null
+        }),
+      });
+    } catch (backendErr) {
+      console.warn("FastAPI MongoDB whisper sync:", backendErr);
+    }
 
     return true;
   } catch (err) {
