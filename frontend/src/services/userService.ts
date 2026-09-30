@@ -27,7 +27,8 @@ import {
   uploadBytesResumable,
   getDownloadURL,
 } from "firebase/storage";
-import { db, storage } from "../firebase";
+import { db, storage, functions } from "../firebase";
+import { httpsCallable } from "firebase/functions";
 import { createNotificationInFirestore } from "./notificationService";
 import { isUserBlockedInFirestore } from "./safetyService";
 import type { UserProfile } from "./authService";
@@ -89,6 +90,18 @@ export const followUser = async (
     return { success: false, reason: "already_following" };
   }
 
+  try {
+    // Call the server-side Cloud Function which runs as Admin and updates counters transactionally
+    const callFollow = httpsCallable(functions, "followUser");
+    const res: any = await callFollow({ targetUid });
+    if (res.data?.success) {
+      return { success: true };
+    }
+  } catch (cloudErr: any) {
+    console.warn("Cloud function followUser failed, falling back to direct doc write:", cloudErr);
+  }
+
+  // Fallback: write the follow document directly (allowed by firestore.rules)
   const relationship: FollowRelationship = {
     followerId: currentUid,
     followingId: targetUid,
@@ -96,14 +109,6 @@ export const followUser = async (
   };
 
   await setDoc(followRef, relationship);
-
-  // Atomic counter updates
-  await updateDoc(doc(db, "users", currentUid), {
-    followingCount: increment(1),
-  });
-  await updateDoc(doc(db, "users", targetUid), {
-    followersCount: increment(1),
-  });
 
   // Notify the target user (fire-and-forget)
   createNotificationInFirestore({
@@ -119,7 +124,7 @@ export const followUser = async (
 
 /**
  * Unfollow a user.
- * Atomically decrements counters (floors at 0).
+ * Routes through the server Cloud Function to decrement counters atomically.
  */
 export const unfollowUser = async (
   currentUid: string,
@@ -137,15 +142,19 @@ export const unfollowUser = async (
     return { success: false, reason: "not_following" };
   }
 
-  await deleteDoc(followRef);
+  try {
+    // Call the server-side Cloud Function
+    const callUnfollow = httpsCallable(functions, "unfollowUser");
+    const res: any = await callUnfollow({ targetUid });
+    if (res.data?.success) {
+      return { success: true };
+    }
+  } catch (cloudErr: any) {
+    console.warn("Cloud function unfollowUser failed, falling back to direct delete:", cloudErr);
+  }
 
-  // Decrement, guarded by Firestore rules to not go below 0
-  await updateDoc(doc(db, "users", currentUid), {
-    followingCount: increment(-1),
-  });
-  await updateDoc(doc(db, "users", targetUid), {
-    followersCount: increment(-1),
-  });
+  // Fallback: delete the follow document directly (allowed by firestore.rules)
+  await deleteDoc(followRef);
 
   return { success: true };
 };
