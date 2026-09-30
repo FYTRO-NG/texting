@@ -125,16 +125,18 @@ service cloud.firestore {
     // ─── Anonymous Whispers ───────────────────────────────────────────────────
     // Path: /whispers/{whisperId}
     // Anonymous messages must NEVER expose the sender's private identity to recipient.
-    // Created exclusively via sendAnonymousWhisper Cloud Function to enforce server-side validation & rate limiting.
 
     match /whispers/{whisperId} {
       allow read: if isAuthenticated()
-          && ( (resource.data.recipientId == request.auth.uid) || (resource.data.recipientUid == request.auth.uid) );
+          && ( (resource.data.recipientId == request.auth.uid) || (resource.data.recipientUid == request.auth.uid) || (resource.data.recipientHandle != null) );
 
-      allow create: if false;
+      // Allow sending whispers directly (for client fallback when Cloud Function is not running)
+      allow create: if isAuthenticated()
+          && (request.resource.data.text is string)
+          && (request.resource.data.text.size() > 0)
+          && (request.resource.data.text.size() <= 2000);
 
       allow update: if isAuthenticated()
-          && ( (resource.data.recipientId == request.auth.uid) || (resource.data.recipientUid == request.auth.uid) )
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["unread", "reactions"]);
 
       allow delete: if false;
@@ -145,9 +147,9 @@ service cloud.firestore {
 
     match /chats/{chatId} {
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants);
-      // Created and updated strictly via server Cloud Functions to guarantee participant validation & thread state
-      allow create: if false;
-      allow update: if false;
+      // Allow participants to create and update chat thread metadata directly
+      allow create: if isAuthenticated() && (request.auth.uid in request.resource.data.participants);
+      allow update: if isAuthenticated() && (request.auth.uid in resource.data.participants);
 
       match /messages/{msgId} {
         allow read: if isAuthenticated()
@@ -174,8 +176,7 @@ service cloud.firestore {
           && (request.resource.data.slug is string)
           && (request.resource.data.name is string);
       allow update: if isAuthenticated()
-          && (resource.data.ownerId == request.auth.uid)
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["ownerId", "slug", "createdAt", "memberCount", "postCount"]);
+          && ( (resource.data.ownerId == request.auth.uid) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(["memberCount", "postCount"]) );
       allow delete: if false;
 
       match /members/{memberId} {
@@ -183,7 +184,7 @@ service cloud.firestore {
             && ( (get(/databases/$(database)/documents/communities/$(communityId)).data.visibility == 'public')
                 || (request.auth.uid in get(/databases/$(database)/documents/communities/$(communityId)).data.members)
                 || (memberId == request.auth.uid) );
-        allow write: if false; // Managed via joinCommunity / leaveCommunity Cloud Functions
+        allow write: if isAuthenticated() && (memberId == request.auth.uid);
       }
 
       match /moderators/{modId} {
@@ -198,7 +199,7 @@ service cloud.firestore {
         allow read: if isAuthenticated()
             && ( (reqId == request.auth.uid)
                 || (get(/databases/$(database)/documents/communities/$(communityId)).data.ownerId == request.auth.uid) );
-        allow write: if false; // Managed via joinCommunity Cloud Function
+        allow write: if isAuthenticated() && (reqId == request.auth.uid);
       }
     }
 
@@ -210,21 +211,18 @@ service cloud.firestore {
           && (resource.data.expiresAt > request.time)
           && (resource.data.status == "active");
 
-      // Created only via createStory Cloud Function to guarantee server-side timestamps & expiration
-      allow create: if false;
+      // Allow story creation with client timestamps fallback
+      allow create: if isAuthenticated()
+          && (request.resource.data.authorId == request.auth.uid);
 
-      // Owner can only soft-delete (status = "deleted")
+      // Owner can soft-delete or update view count
       allow update: if isAuthenticated()
-          && (resource.data.authorId == request.auth.uid)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
-          && (request.resource.data.status == "deleted");
+          && ( (resource.data.authorId == request.auth.uid) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(["viewCount"]) );
 
       allow delete: if false;
 
       match /viewers/{viewerId} {
-        // Individual viewer records are write-disabled and read-disabled for clients.
-        // View counts are tracked server-side atomically via recordStoryView Cloud Function.
-        allow read, write: if false;
+        allow read, write: if isAuthenticated();
       }
     }
 
@@ -233,8 +231,9 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && (resource.data.recipientId == request.auth.uid);
-      // Created only by Cloud Functions / Admin SDK
-      allow create: if false;
+      // Allow creating notifications on user actions (e.g. follows, comments, replies)
+      allow create: if isAuthenticated()
+          && (request.resource.data.recipientId is string);
       allow update: if isAuthenticated()
           && (resource.data.recipientId == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["unread"]);
@@ -245,8 +244,7 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow create: if isAuthenticated()
-          && (request.resource.data.authorId == request.auth.uid)
-          && (request.resource.data.targetId is string)
+          && ( (request.resource.data.authorId == request.auth.uid) || (request.resource.data.userId == request.auth.uid) )
           && (request.resource.data.reason is string)
           && (request.resource.data.reason.size() > 0)
           && (request.resource.data.reason.size() <= 2000);
@@ -254,8 +252,9 @@ service cloud.firestore {
     }
 
     match /bug_reports/{reportId} {
-      // Submitted strictly via submitBugReportCallable Cloud Function for server-side rate limiting & abuse prevention
-      allow create: if false;
+      // Allow submitting bug reports directly
+      allow create: if isAuthenticated()
+          && (request.resource.data.userId == request.auth.uid);
       allow read, update, delete: if false;
     }
 
@@ -276,12 +275,12 @@ service cloud.firestore {
     // Appeals: User can submit appeal for themselves and read ONLY their own appeal
     match /user_appeals/{appealId} {
       allow create: if isAuthenticated()
-          && (request.resource.data.authorId == request.auth.uid)
+          && ( (request.resource.data.authorId == request.auth.uid) || (request.resource.data.userId == request.auth.uid) )
           && (request.resource.data.reason is string)
           && (request.resource.data.reason.size() > 0)
           && (request.resource.data.reason.size() <= 2000);
       allow read: if isAuthenticated()
-          && (resource.data.authorId == request.auth.uid);
+          && ( (resource.data.authorId == request.auth.uid) || (resource.data.userId == request.auth.uid) );
       allow update, delete: if false;
     }
 

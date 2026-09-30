@@ -10,6 +10,8 @@ import {
   updateDoc,
   getDoc,
   setDoc,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInAnonymously } from "firebase/auth";
