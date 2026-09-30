@@ -304,6 +304,7 @@ export const resetPassword = async (email: string): Promise<void> => {
 // ─── Sign Out ─────────────────────────────────────────────────────────────────
 
 export const logout = async (): Promise<void> => {
+  await clearAuthToken();
   await signOut(auth);
 };
 
