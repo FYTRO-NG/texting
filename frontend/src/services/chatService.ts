@@ -38,6 +38,7 @@ export const subscribeToChatThreads = (
         const otherParticipant = data.participantDetails?.find(
           (p: any) => p.uid !== userId
         ) || {
+          uid: (data.participants || []).find((p: string) => p !== userId) || "",
           nickname: "Anonymous Voice",
           avatarColor: ["#06B6D4", "#0284C7"],
           avatarIcon: "flash",
@@ -52,6 +53,7 @@ export const subscribeToChatThreads = (
           time: data.updatedAt ? "Just now" : "1m",
           unread: data.unreadCount?.[userId] || 0,
           online: true,
+          otherUserId: otherParticipant.uid || (data.participants || []).find((p: string) => p !== userId),
         };
       });
       callback(list);

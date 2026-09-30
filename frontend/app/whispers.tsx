@@ -14,11 +14,14 @@ import {
   TouchableOpacity,
   View,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, font, radii, spacing } from "@/src/theme";
 import { auth } from "@/src/firebase";
+import ReportModal from "@/src/components/ReportModal";
+import { subscribeToUserProfile } from "@/src/services/authService";
 import {
   WhisperMessage,
   subscribeToWhispers,
@@ -92,6 +95,8 @@ export default function Whispers() {
   const [messages, setMessages] = useState<Whisper[]>([]);
   const { settings, biometricInfo } = useSecurity();
   const [inboxUnlocked, setInboxUnlocked] = useState(!settings.protectInbox);
+  const [selectedWhisperForReport, setSelectedWhisperForReport] = useState<Whisper | null>(null);
+  const [blockedUsersCount, setBlockedUsersCount] = useState<number>(0);
 
   // ── Real user handle ──────────────────────────────────────
   const user = auth?.currentUser;
@@ -110,6 +115,10 @@ export default function Whispers() {
       setAccepting(ws.acceptingWhispers);
       setPrompt(ws.whisperPrompt);
     });
+    const unsubs = subscribeToUserProfile(user.uid, (p) => {
+      setBlockedUsersCount(p?.blockedUsers?.length || 0);
+    });
+    return () => unsubs();
   }, [user?.uid]);
 
   // ── Persist accepting toggle changes ──────────────────────
@@ -463,10 +472,14 @@ export default function Whispers() {
             <Ionicons name="image-outline" size={12} color={colors.brand} />
             <Text style={styles.prefText}>Images allowed</Text>
           </View>
-          <View style={styles.prefChip}>
+          <TouchableOpacity
+            style={styles.prefChip}
+            onPress={() => router.push("/blocked-users" as any)}
+            testID="whispers-blocked-chip"
+          >
             <Ionicons name="ban-outline" size={12} color={colors.warning} />
-            <Text style={styles.prefText}>3 blocked</Text>
-          </View>
+            <Text style={styles.prefText}>{blockedUsersCount} blocked</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Inbox */}
@@ -547,7 +560,24 @@ export default function Whispers() {
                         <Text style={styles.reactCount}>{w.reactions}</Text>
                       </View>
                     )}
-                    <TouchableOpacity style={styles.wIconBtn} testID={`whisper-more-${w.id}`}>
+                    <TouchableOpacity
+                      style={styles.wIconBtn}
+                      testID={`whisper-more-${w.id}`}
+                      onPress={() => {
+                        Alert.alert(
+                          "Whisper Options",
+                          "Manage this anonymous whisper",
+                          [
+                            {
+                              text: "Report Whisper",
+                              style: "destructive",
+                              onPress: () => setSelectedWhisperForReport(w),
+                            },
+                            { text: "Cancel", style: "cancel" },
+                          ]
+                        );
+                      }}
+                    >
                       <Ionicons name="ellipsis-horizontal" size={16} color={colors.onSurfaceMuted} />
                     </TouchableOpacity>
                   </View>
@@ -566,6 +596,16 @@ export default function Whispers() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+
+    {selectedWhisperForReport && (
+      <ReportModal
+        visible={!!selectedWhisperForReport}
+        onClose={() => setSelectedWhisperForReport(null)}
+        targetType="whisper"
+        targetId={selectedWhisperForReport.id}
+        targetContent={selectedWhisperForReport.message}
+      />
+    )}
     </View>
   );
 }

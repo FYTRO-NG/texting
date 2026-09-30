@@ -10,7 +10,7 @@ import {
   signInWithPopup,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 
 import { auth, db } from "../firebase";
@@ -38,6 +38,8 @@ export type UserProfile = {
   privacy: {
     anonymousMessagesEnabled: boolean;
   };
+  blockedUsers?: string[];
+  mutedUsers?: string[];
   lastUsernameChangeAt?: any;
   nextUsernameChangeAt?: any;
   joinedAt?: any;
@@ -322,4 +324,18 @@ export const updateUserProfile = async (
   updates: Partial<UserProfile>
 ) => {
   await updateDoc(doc(db, "users", uid), updates as any);
+};
+
+export const subscribeToUserProfile = (
+  uid: string,
+  callback: (profile: UserProfile | null) => void
+) => {
+  if (!uid) return () => {};
+  return onSnapshot(doc(db, "users", uid), (snap) => {
+    if (snap.exists()) {
+      callback(snap.data() as UserProfile);
+    } else {
+      callback(null);
+    }
+  });
 };

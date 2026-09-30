@@ -10,7 +10,7 @@ import { AVATAR_GRADIENTS } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 import InviteFriendsModal from "@/src/components/InviteFriendsModal";
 import ReportBugModal from "@/src/components/ReportBugModal";
-import { logout, getUserProfile, UserProfile } from "@/src/services/authService";
+import { logout, getUserProfile, subscribeToUserProfile, UserProfile } from "@/src/services/authService";
 import { auth } from "@/src/firebase";
 import { useSecurity } from "@/src/contexts/SecurityContext";
 import {
@@ -41,9 +41,10 @@ export default function Settings() {
   useEffect(() => {
     const uid = auth?.currentUser?.uid;
     if (!uid) return;
-    getUserProfile(uid).then((p) => {
+    const unsubscribe = subscribeToUserProfile(uid, (p) => {
       if (p) setUserProfile(p);
     });
+    return () => unsubscribe();
   }, []);
 
   const handle =
@@ -141,9 +142,9 @@ export default function Settings() {
         {
           icon: "person-remove-outline",
           label: "Blocked users",
-          hint: "0 accounts blocked",
+          hint: `${userProfile?.blockedUsers?.length || 0} accounts blocked`,
           chevron: true,
-          onPress: () => Alert.alert("Blocked Users", "You currently have no blocked accounts."),
+          onPress: () => router.push("/blocked-users" as any),
         },
         {
           icon: "eye-off-outline",

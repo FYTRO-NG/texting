@@ -29,6 +29,7 @@ import {
 } from "firebase/storage";
 import { db, storage } from "../firebase";
 import { createNotificationInFirestore } from "./notificationService";
+import { isUserBlockedInFirestore } from "./safetyService";
 import type { UserProfile } from "./authService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -67,6 +68,16 @@ export const followUser = async (
 ): Promise<{ success: boolean; reason?: string }> => {
   if (currentUid === targetUid) {
     return { success: false, reason: "self_follow" };
+  }
+
+  // Check if either user has blocked the other
+  const [targetBlockedMe, iBlockedTarget] = await Promise.all([
+    isUserBlockedInFirestore(targetUid, currentUid),
+    isUserBlockedInFirestore(currentUid, targetUid),
+  ]);
+
+  if (targetBlockedMe || iBlockedTarget) {
+    return { success: false, reason: "blocked" };
   }
 
   // Uniqueness check — document ID is composite to enforce uniqueness

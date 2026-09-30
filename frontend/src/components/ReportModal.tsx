@@ -19,16 +19,32 @@ import { submitContentReport } from "@/src/services/safetyService";
 type Props = {
   visible: boolean;
   onClose: () => void;
-  targetType: "post" | "message" | "user" | "comment";
+  targetType: "post" | "message" | "user" | "comment" | "whisper" | "profile";
   targetId: string;
   targetContent?: string;
 };
 
-const REASONS: { key: "harassment" | "hate_speech" | "spam" | "threat_self_harm" | "impersonation" | "other"; label: string; icon: string }[] = [
-  { key: "harassment", label: "Harassment or Bullying", icon: "hand-stop-outline" },
-  { key: "hate_speech", label: "Hate Speech or Slurs", icon: "warning-outline" },
-  { key: "threat_self_harm", label: "Threat or Self-Harm", icon: "alert-circle-outline" },
-  { key: "spam", label: "Spam or Scam", icon: "flag-outline" },
+export const REPORT_REASONS: {
+  key:
+    | "harassment"
+    | "bullying"
+    | "spam"
+    | "hate"
+    | "threats"
+    | "sexual_content"
+    | "scam"
+    | "impersonation"
+    | "other";
+  label: string;
+  icon: string;
+}[] = [
+  { key: "harassment", label: "Harassment", icon: "hand-stop-outline" },
+  { key: "bullying", label: "Bullying", icon: "warning-outline" },
+  { key: "spam", label: "Spam", icon: "flag-outline" },
+  { key: "hate", label: "Hate Speech or Symbols", icon: "alert-circle-outline" },
+  { key: "threats", label: "Violence or Threats", icon: "flame-outline" },
+  { key: "sexual_content", label: "Sexual or Explicit Content", icon: "eye-off-outline" },
+  { key: "scam", label: "Scam or Fraud", icon: "cash-outline" },
   { key: "impersonation", label: "Impersonation", icon: "person-remove-outline" },
   { key: "other", label: "Other Violation", icon: "ellipsis-horizontal-circle-outline" },
 ];
@@ -40,7 +56,7 @@ export default function ReportModal({
   targetId,
   targetContent,
 }: Props) {
-  const [selectedReason, setSelectedReason] = useState<any>(REASONS[0].key);
+  const [selectedReason, setSelectedReason] = useState<string>(REPORT_REASONS[0].key);
   const [details, setDetails] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -102,7 +118,7 @@ export default function ReportModal({
               <Text style={styles.subtitle}>Select the primary reason for reporting:</Text>
 
               <View style={styles.reasonsGroup}>
-                {REASONS.map((r) => {
+                {REPORT_REASONS.map((r) => {
                   const active = selectedReason === r.key;
                   return (
                     <TouchableOpacity

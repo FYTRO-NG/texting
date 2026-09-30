@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,6 +22,8 @@ import { AVATAR_GRADIENTS, Comment, Post } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 import { getPostById, subscribeToComments, addCommentToFirestore, incrementViewCount } from "@/src/services/postService";
 import { getUserProfile, ensureAnonymousAuth } from "@/src/services/authService";
+import { blockUserInFirestore } from "@/src/services/safetyService";
+import ReportModal from "@/src/components/ReportModal";
 import { auth } from "@/src/firebase";
 
 const SORT_TABS = ["Top", "New", "Following"];
@@ -30,11 +33,61 @@ function CommentBlock({ c, depth = 0 }: { c: Comment; depth?: number }) {
   const [liked, setLiked] = useState(!!c.liked);
   const [likes, setLikes] = useState(c.likes);
   const [expanded, setExpanded] = useState(true);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+
+  const currentUserId = auth.currentUser?.uid;
 
   const onLike = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLiked((v) => !v);
     setLikes((n) => (liked ? n - 1 : n + 1));
+  };
+
+  const onCommentOptions = () => {
+    const isMyComment = (c.authorId && c.authorId === currentUserId) || (c.userId && c.userId === currentUserId);
+    if (isMyComment) {
+      Alert.alert("Comment Options", "Your comment on this post.", [{ text: "OK" }]);
+      return;
+    }
+
+    Alert.alert(
+      "Comment Options",
+      `Manage comment by @${c.username}`,
+      [
+        {
+          text: "Report Comment",
+          style: "destructive",
+          onPress: () => setReportModalVisible(true),
+        },
+        {
+          text: `Block @${c.username}`,
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Block User",
+              `Are you sure you want to block @${c.username}?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Block",
+                  style: "destructive",
+                  onPress: async () => {
+                    const targetId = c.authorId || c.userId;
+                    if (targetId) {
+                      await blockUserInFirestore(targetId);
+                      Alert.alert("User Blocked", `@${c.username} has been blocked.`);
+                    } else {
+                      Alert.alert("Notice", "User identifier not available.");
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
   };
 
   return (
@@ -71,7 +124,7 @@ function CommentBlock({ c, depth = 0 }: { c: Comment; depth?: number }) {
               <Ionicons name="return-down-forward" size={14} color={colors.onSurfaceMuted} />
               <Text style={styles.cActionText}>Reply</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cAction}>
+            <TouchableOpacity style={styles.cAction} onPress={onCommentOptions} testID={`comment-more-${c.id}`}>
               <Ionicons name="ellipsis-horizontal" size={14} color={colors.onSurfaceMuted} />
             </TouchableOpacity>
           </View>
@@ -90,6 +143,14 @@ function CommentBlock({ c, depth = 0 }: { c: Comment; depth?: number }) {
           )}
         </View>
       </View>
+
+      <ReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        targetType="comment"
+        targetId={c.id}
+        targetContent={c.text}
+      />
     </View>
   );
 }
@@ -175,6 +236,58 @@ export default function PostDetail() {
   };
 
 
+  const [postReportModalVisible, setPostReportModalVisible] = useState(false);
+
+  const onPostOptions = () => {
+    if (!post) return;
+    const currentUserId = auth.currentUser?.uid;
+    const isMyPost = (post.authorId && post.authorId === currentUserId) || (post.userId && post.userId === currentUserId);
+
+    if (isMyPost) {
+      Alert.alert("Post Options", "Your anonymous echo on Private Voices.", [{ text: "OK" }]);
+      return;
+    }
+
+    Alert.alert(
+      "Post Options",
+      `Manage post or author @${post.username}`,
+      [
+        {
+          text: "Report Post",
+          style: "destructive",
+          onPress: () => setPostReportModalVisible(true),
+        },
+        {
+          text: `Block @${post.username}`,
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Block User",
+              `Are you sure you want to block @${post.username}? You won't see their posts or messages.`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Block",
+                  style: "destructive",
+                  onPress: async () => {
+                    const targetId = post.authorId || post.userId;
+                    if (targetId) {
+                      await blockUserInFirestore(targetId);
+                      Alert.alert("User Blocked", `@${post.username} has been blocked.`);
+                    } else {
+                      Alert.alert("Notice", "User identifier not available.");
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container} testID="post-detail-screen">
       <LinearGradient colors={["#0F172A", "#0B1220"]} style={StyleSheet.absoluteFillObject} />
@@ -185,9 +298,14 @@ export default function PostDetail() {
             <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Thread</Text>
-          <TouchableOpacity style={styles.iconBtn} testID="post-share-header">
-            <Ionicons name="share-outline" size={18} color={colors.onSurface} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity style={styles.iconBtn} testID="post-share-header">
+              <Ionicons name="share-outline" size={18} color={colors.onSurface} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconBtn} onPress={onPostOptions} testID="post-options-header">
+              <Ionicons name="ellipsis-vertical" size={18} color={colors.onSurface} />
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -369,6 +487,16 @@ export default function PostDetail() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {post && (
+        <ReportModal
+          visible={postReportModalVisible}
+          onClose={() => setPostReportModalVisible(false)}
+          targetType="post"
+          targetId={post.id}
+          targetContent={post.text}
+        />
+      )}
     </View>
   );
 }

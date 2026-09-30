@@ -106,7 +106,7 @@ export default function Chats() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.chatRow}
-            onPress={() => router.push({ pathname: "/chat/[id]", params: { id: item.id, name: item.nickname } } as any)}
+            onPress={() => router.push({ pathname: "/chat/[id]", params: { id: item.id, name: item.nickname, targetUserId: item.otherUserId } } as any)}
             activeOpacity={0.85}
             testID={`chat-row-${item.id}`}
           >

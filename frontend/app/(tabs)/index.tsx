@@ -11,7 +11,7 @@ import { Post } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 
 import { subscribeToPosts } from "@/src/services/postService";
-import { ensureAnonymousAuth } from "@/src/services/authService";
+import { ensureAnonymousAuth, subscribeToUserProfile } from "@/src/services/authService";
 import { auth } from "@/src/firebase";
 
 const FILTERS = ["For You", "Following", "Trending", "Communities", "Recent"];
@@ -21,32 +21,53 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState(0);
   const [postsList, setPostsList] = useState<Post[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    let unsubsUser = () => {};
     if (!auth?.currentUser) {
-      ensureAnonymousAuth().catch(console.warn);
+      ensureAnonymousAuth()
+        .then((user) => {
+          if (user?.uid) {
+            unsubsUser = subscribeToUserProfile(user.uid, (prof) => {
+              setBlockedUsers(prof?.blockedUsers || []);
+            });
+          }
+        })
+        .catch(console.warn);
+    } else {
+      unsubsUser = subscribeToUserProfile(auth.currentUser.uid, (prof) => {
+        setBlockedUsers(prof?.blockedUsers || []);
+      });
     }
 
-    const unsubscribe = subscribeToPosts((livePosts) => {
+    const unsubscribePosts = subscribeToPosts((livePosts) => {
       setPostsList(livePosts);
       setLoading(false);
       setRefreshing(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubsUser();
+      unsubscribePosts();
+    };
   }, []);
 
-
-  // Filter posts based on selected tab
+  // Filter posts based on selected tab and hide blocked users
   const filteredPosts = useMemo(() => {
-    if (filter === 0) return postsList; // For You
-    if (filter === 1) return postsList.filter((p) => p.community !== "General"); // Following
-    if (filter === 2) return [...postsList].sort((a, b) => b.likes - a.likes); // Trending
-    if (filter === 3) return postsList.filter((p) => Boolean(p.community)); // Communities
-    return [...postsList].reverse(); // Recent
-  }, [postsList, filter]);
+    const unblocked = postsList.filter(
+      (p) =>
+        (!p.authorId || !blockedUsers.includes(p.authorId)) &&
+        (!p.userId || !blockedUsers.includes(p.userId))
+    );
+    if (filter === 0) return unblocked; // For You
+    if (filter === 1) return unblocked.filter((p) => p.community !== "General"); // Following
+    if (filter === 2) return [...unblocked].sort((a, b) => b.likes - a.likes); // Trending
+    if (filter === 3) return unblocked.filter((p) => Boolean(p.community)); // Communities
+    return [...unblocked].reverse(); // Recent
+  }, [postsList, filter, blockedUsers]);
 
   const onRefresh = () => {
     setRefreshing(true);

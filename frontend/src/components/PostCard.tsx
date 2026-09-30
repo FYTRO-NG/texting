@@ -14,9 +14,10 @@ import {
   toggleLikePost,
   toggleSavePost,
   repostPostInFirestore,
-  reportPostInFirestore,
   voteOnPollInFirestore,
 } from "../services/postService";
+import { blockUserInFirestore } from "../services/safetyService";
+import ReportModal from "./ReportModal";
 import { auth } from "../firebase";
 
 type Props = { post: Post };
@@ -79,20 +80,52 @@ export default function PostCard({ post }: Props) {
     } catch (_) {}
   };
 
-  const onReport = () => {
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+
+  const onOptions = () => {
+    const isMyPost = post.authorId === userId || post.userId === userId;
+
+    if (isMyPost) {
+      Alert.alert("Post Options", "Your anonymous echo on Private Voices.", [{ text: "OK" }]);
+      return;
+    }
+
     Alert.alert(
-      "Report Post",
-      "Are you sure you want to report this post for violating community guidelines?",
+      "Post Options",
+      `Manage post or author @${post.username}`,
       [
-        { text: "Cancel", style: "cancel" },
         {
-          text: "Report",
+          text: "Report Post",
           style: "destructive",
-          onPress: async () => {
-            await reportPostInFirestore(post.id, userId, "User reported post");
-            Alert.alert("Report Received", "Thank you. Our moderation team has been notified.");
+          onPress: () => setReportModalVisible(true),
+        },
+        {
+          text: `Block @${post.username}`,
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Block User",
+              `Are you sure you want to block @${post.username}? You won't see their posts or messages.`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Block",
+                  style: "destructive",
+                  onPress: async () => {
+                    const targetId = post.authorId || post.userId;
+                    if (targetId) {
+                      await blockUserInFirestore(targetId);
+                      Alert.alert("User Blocked", `@${post.username} has been blocked.`);
+                    } else {
+                      Alert.alert("Notice", "User identifier not available.");
+                    }
+                  },
+                },
+              ]
+            );
           },
         },
+        { text: "Cancel", style: "cancel" },
       ]
     );
   };
@@ -110,12 +143,13 @@ export default function PostCard({ post }: Props) {
     : 0;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      onPress={() => router.push({ pathname: "/post/[id]", params: { id: post.id } } as any)}
-      style={styles.card}
-      testID={`post-card-${post.id}`}
-    >
+    <>
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={() => router.push({ pathname: "/post/[id]", params: { id: post.id } } as any)}
+        style={styles.card}
+        testID={`post-card-${post.id}`}
+      >
       {/* Header */}
       <View style={styles.header}>
         <Avatar size={40} gradient={post.avatarColor} icon={post.avatarIcon} />
@@ -130,7 +164,7 @@ export default function PostCard({ post }: Props) {
             <Text style={styles.communityText}>{post.community}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.moreBtn} onPress={onReport} testID={`post-more-${post.id}`}>
+        <TouchableOpacity style={styles.moreBtn} onPress={onOptions} testID={`post-more-${post.id}`}>
           <Ionicons name="ellipsis-horizontal" size={18} color={colors.onSurfaceMuted} />
         </TouchableOpacity>
       </View>
@@ -243,6 +277,15 @@ export default function PostCard({ post }: Props) {
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
+
+    <ReportModal
+      visible={reportModalVisible}
+      onClose={() => setReportModalVisible(false)}
+      targetType="post"
+      targetId={post.id}
+      targetContent={post.text}
+    />
+  </>
   );
 }
 

@@ -21,6 +21,12 @@ import {
 import { getUidByUsername } from "@/src/services/usernameService";
 import { trackFollowUser, trackUnfollowUser, trackProfileViewed } from "@/src/services/analyticsService";
 import { subscribeToPostsByUser } from "@/src/services/postService";
+import {
+  blockUserInFirestore,
+  unblockUserInFirestore,
+  isUserBlockedInFirestore,
+} from "@/src/services/safetyService";
+import ReportModal from "@/src/components/ReportModal";
 
 const TABS = [
   { key: "posts", label: "Posts", count: 0 },
@@ -115,13 +121,94 @@ export default function PublicProfile() {
     }
   }, [currentUid, resolvedUid, following, currentUsername]);
 
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+
+  // Check if current user has blocked this user
+  useEffect(() => {
+    if (!currentUid || !resolvedUid || currentUid === resolvedUid) return;
+    isUserBlockedInFirestore(currentUid, resolvedUid).then(setIsBlocked);
+  }, [currentUid, resolvedUid]);
+
+  const onToggleBlock = useCallback(async () => {
+    if (!currentUid) {
+      Alert.alert("Sign In Required", "Please sign in to manage blocked users.");
+      return;
+    }
+    if (!resolvedUid || currentUid === resolvedUid) return;
+
+    if (isBlocked) {
+      await unblockUserInFirestore(resolvedUid);
+      setIsBlocked(false);
+      Alert.alert("Unblocked", `@${displayHandle} has been unblocked.`);
+    } else {
+      Alert.alert(
+        "Block User",
+        `Are you sure you want to block @${displayHandle}? You will no longer see their posts or messages, and they will not be able to interact with you.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Block",
+            style: "destructive",
+            onPress: async () => {
+              await blockUserInFirestore(resolvedUid);
+              setIsBlocked(true);
+              if (following) {
+                await unfollowUser(currentUid, resolvedUid).catch(() => {});
+                setFollowing(false);
+              }
+              Alert.alert("User Blocked", `@${displayHandle} is now blocked.`);
+            },
+          },
+        ]
+      );
+    }
+  }, [currentUid, resolvedUid, isBlocked, displayHandle, following]);
+
+  const onMoreOptions = useCallback(() => {
+    if (!currentUid || currentUid === resolvedUid) {
+      Alert.alert(
+        `@${displayHandle}`,
+        "Public anonymous profile on Private Voices.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      `@${displayHandle}`,
+      "Manage interactions or report this user.",
+      [
+        {
+          text: isBlocked ? "Unblock User" : "Block User",
+          style: isBlocked ? "default" : "destructive",
+          onPress: onToggleBlock,
+        },
+        {
+          text: "Report User",
+          style: "destructive",
+          onPress: () => setReportModalVisible(true),
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  }, [currentUid, resolvedUid, displayHandle, isBlocked, onToggleBlock]);
+
   const feed = userPosts;
 
   const onMessage = () => {
+    if (isBlocked) {
+      Alert.alert("Blocked", "You cannot message a blocked account.");
+      return;
+    }
     router.push({ pathname: "/chat/[id]", params: { id: "new", name: displayHandle } } as any);
   };
 
   const onSendWhisper = () => {
+    if (isBlocked) {
+      Alert.alert("Blocked", "You cannot send whispers to a blocked account.");
+      return;
+    }
     router.push({ pathname: "/w/[handle]", params: { handle: displayHandle } } as any);
   };
 
@@ -152,7 +239,7 @@ export default function PublicProfile() {
               <TouchableOpacity style={styles.iconBtn} testID="public-share">
                 <Ionicons name="share-outline" size={18} color={colors.onSurface} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} testID="public-more">
+              <TouchableOpacity style={styles.iconBtn} onPress={onMoreOptions} testID="public-more">
                 <Ionicons name="ellipsis-horizontal" size={18} color={colors.onSurface} />
               </TouchableOpacity>
             </View>
@@ -353,11 +440,35 @@ export default function PublicProfile() {
             })}
           </View>
 
-          <View style={{ marginTop: spacing.lg }}>
-            {feed.map((p) => <PostCard key={p.id} post={p} />)}
-          </View>
+          {isBlocked ? (
+            <View style={{ marginTop: spacing.xl, alignItems: "center", padding: spacing.xl, backgroundColor: "rgba(239,68,68,0.08)", borderRadius: radii.lg, borderWidth: 1, borderColor: "rgba(239,68,68,0.2)" }}>
+              <Ionicons name="hand-left-outline" size={36} color={colors.error} />
+              <Text style={{ ...font.title, color: colors.onSurface, marginTop: spacing.sm }}>User Blocked</Text>
+              <Text style={{ ...font.caption, color: colors.onSurfaceMuted, textAlign: "center", marginTop: 4 }}>
+                You have blocked @{displayHandle}. You will not see their posts or messages.
+              </Text>
+              <TouchableOpacity
+                onPress={onToggleBlock}
+                style={{ marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radii.md, backgroundColor: "rgba(255,255,255,0.08)" }}
+              >
+                <Text style={{ color: colors.onSurface, fontWeight: "600" }}>Unblock</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ marginTop: spacing.lg }}>
+              {feed.map((p) => <PostCard key={p.id} post={p} />)}
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      <ReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        targetType="user"
+        targetId={resolvedUid || displayHandle}
+        targetContent={`Profile @${displayHandle}`}
+      />
     </View>
   );
 }

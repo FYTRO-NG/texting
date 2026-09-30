@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -19,15 +20,19 @@ import Avatar from "@/src/components/Avatar";
 import { AVATAR_GRADIENTS } from "@/src/mockData";
 import { colors, font, radii, spacing } from "@/src/theme";
 import { subscribeToMessages, sendMessageInFirestore, MessageItem } from "@/src/services/chatService";
+import { blockUserInFirestore, isUserBlockedInFirestore } from "@/src/services/safetyService";
+import ReportModal from "@/src/components/ReportModal";
 import { auth } from "@/src/firebase";
 
 export default function Conversation() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
+  const { id, name, targetUserId } = useLocalSearchParams<{ id: string; name?: string; targetUserId?: string }>();
   const nickname = (name as string) || "ShadowFox_42";
   const [text, setText] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
   const currentUserId = auth.currentUser?.uid || "current-user";
 
   useEffect(() => {
@@ -40,8 +45,14 @@ export default function Conversation() {
     return () => unsubscribe();
   }, [id, currentUserId]);
 
+  useEffect(() => {
+    if (currentUserId && targetUserId) {
+      isUserBlockedInFirestore(currentUserId, targetUserId).then(setIsBlocked);
+    }
+  }, [currentUserId, targetUserId]);
+
   const send = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || isBlocked) return;
     const msgText = text.trim();
     setText("");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -54,6 +65,48 @@ export default function Conversation() {
         { id: `m${Date.now()}`, fromMe: true, text: msgText, time: "now" },
       ]);
     }
+  };
+
+  const onChatMenu = () => {
+    Alert.alert(
+      "Chat Options",
+      `Manage conversation with ${nickname}`,
+      [
+        {
+          text: "Report User / Chat",
+          style: "destructive",
+          onPress: () => setReportModalVisible(true),
+        },
+        {
+          text: isBlocked ? "User Blocked" : `Block ${nickname}`,
+          style: isBlocked ? "default" : "destructive",
+          onPress: () => {
+            if (isBlocked) return;
+            Alert.alert(
+              "Block User",
+              `Are you sure you want to block ${nickname}? You will no longer be able to message each other.`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Block",
+                  style: "destructive",
+                  onPress: async () => {
+                    if (targetUserId) {
+                      await blockUserInFirestore(targetUserId);
+                      setIsBlocked(true);
+                      Alert.alert("User Blocked", `${nickname} has been blocked.`);
+                    } else {
+                      Alert.alert("Notice", "User identifier not available to block directly.");
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
   };
 
   return (
@@ -75,7 +128,7 @@ export default function Conversation() {
               </View>
             </View>
           </View>
-          <TouchableOpacity style={styles.iconBtn} testID="chat-menu">
+          <TouchableOpacity style={styles.iconBtn} testID="chat-menu" onPress={onChatMenu}>
             <Ionicons name="ellipsis-vertical" size={18} color={colors.onSurface} />
           </TouchableOpacity>
         </View>
@@ -120,38 +173,54 @@ export default function Conversation() {
           }
         />
 
-        <View style={[styles.inputRow, { paddingBottom: 10 + insets.bottom }]}>
-          <TouchableOpacity style={styles.attachBtn} testID="chat-attach">
-            <Ionicons name="add-circle" size={30} color={colors.brand} />
-          </TouchableOpacity>
-          <View style={styles.inputWrap}>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder="Send anonymously…"
-              placeholderTextColor={colors.onSurfaceDim}
-              style={styles.input}
-              multiline
-              testID="chat-input"
-            />
-            <TouchableOpacity style={styles.iconInside} testID="chat-emoji">
-              <Ionicons name="happy-outline" size={20} color={colors.onSurfaceMuted} />
+        {isBlocked ? (
+          <View style={{ padding: spacing.lg, backgroundColor: "rgba(239, 68, 68, 0.1)", alignItems: "center", borderTopWidth: 1, borderColor: "rgba(239, 68, 68, 0.2)" }}>
+            <Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "600" }}>
+              This user is blocked. Unblock them from Settings or their profile to chat.
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.inputRow, { paddingBottom: 10 + insets.bottom }]}>
+            <TouchableOpacity style={styles.attachBtn} testID="chat-attach">
+              <Ionicons name="add-circle" size={30} color={colors.brand} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconInside} testID="chat-mic">
-              <Ionicons name="mic-outline" size={20} color={colors.onSurfaceMuted} />
+            <View style={styles.inputWrap}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder="Send anonymously…"
+                placeholderTextColor={colors.onSurfaceDim}
+                style={styles.input}
+                multiline
+                testID="chat-input"
+              />
+              <TouchableOpacity style={styles.iconInside} testID="chat-emoji">
+                <Ionicons name="happy-outline" size={20} color={colors.onSurfaceMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconInside} testID="chat-mic">
+                <Ionicons name="mic-outline" size={20} color={colors.onSurfaceMuted} />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={send} activeOpacity={0.85} style={styles.sendBtn} testID="chat-send">
+              <LinearGradient
+                colors={["#06B6D4", "#0284C7"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <Ionicons name="send" size={18} color="#0F172A" />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={send} activeOpacity={0.85} style={styles.sendBtn} testID="chat-send">
-            <LinearGradient
-              colors={["#06B6D4", "#0284C7"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <Ionicons name="send" size={18} color="#0F172A" />
-          </TouchableOpacity>
-        </View>
+        )}
       </KeyboardAvoidingView>
+
+      <ReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        targetType="user"
+        targetId={targetUserId || (id as string)}
+        targetContent={`Conversation with ${nickname}`}
+      />
     </View>
   );
 }

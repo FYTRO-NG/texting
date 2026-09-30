@@ -3,6 +3,8 @@ import { colors, gradients } from "./theme";
 export type Post = {
   id: string;
   username: string;
+  authorId?: string;
+  userId?: string;
   avatarColor: readonly [string, string];
   avatarIcon: string;
   community: string;
@@ -40,6 +42,7 @@ export type ChatThread = {
   time: string;
   unread: number;
   online?: boolean;
+  otherUserId?: string;
 };
 
 export type Notification = {
@@ -64,6 +67,8 @@ export type Whisper = {
 export type Comment = {
   id: string;
   username: string;
+  authorId?: string;
+  userId?: string;
   avatarColor: readonly [string, string];
   avatarIcon: string;
   time: string;

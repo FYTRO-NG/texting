@@ -1,4 +1,4 @@
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import {
   collection,
   addDoc,
@@ -50,6 +50,8 @@ function mapDocToPost(docSnap: any, saved = false): Post {
   return {
     id: docSnap.id,
     username: data.username || "Anonymous Voice",
+    authorId: data.authorId || data.userId || undefined,
+    userId: data.userId || data.authorId || undefined,
     avatarColor: data.avatarColor || ["#06B6D4", "#0284C7"],
     avatarIcon: data.avatarIcon || "flash",
     community: data.community || "General",
@@ -113,12 +115,43 @@ export const subscribeToComments = (postId: string, callback: (comments: any[]) 
   const q = query(collection(db, "posts", postId, "comments"), orderBy("createdAt", "asc"));
   return onSnapshot(q, (s) => callback(s.docs.map((d) => {
     const data = d.data();
-    return { id: d.id, username: data.username || "Anonymous", avatarColor: data.avatarColor || ["#06B6D4", "#0284C7"], avatarIcon: data.avatarIcon || "flash", time: "Just now", text: data.text || "", likes: data.likes || 0, liked: false, op: data.isOp || false };
+    return {
+      id: d.id,
+      username: data.username || "Anonymous",
+      authorId: data.authorId || data.userId || undefined,
+      userId: data.userId || data.authorId || undefined,
+      avatarColor: data.avatarColor || ["#06B6D4", "#0284C7"],
+      avatarIcon: data.avatarIcon || "flash",
+      time: "Just now",
+      text: data.text || "",
+      likes: data.likes || 0,
+      liked: false,
+      op: data.isOp || false
+    };
   })));
 };
 
-export const addCommentToFirestore = async (postId: string, commentData: { username: string; avatarColor: [string, string]; avatarIcon: string; text: string; isOp?: boolean }) => {
-  await addDoc(collection(db, "posts", postId, "comments"), { ...commentData, likes: 0, createdAt: serverTimestamp() });
+export const addCommentToFirestore = async (
+  postId: string,
+  commentData: {
+    username: string;
+    authorId?: string;
+    userId?: string;
+    avatarColor: [string, string];
+    avatarIcon: string;
+    text: string;
+    isOp?: boolean;
+  }
+) => {
+  const currentUid = auth.currentUser?.uid;
+  const authorId = commentData.authorId || commentData.userId || currentUid;
+  await addDoc(collection(db, "posts", postId, "comments"), {
+    ...commentData,
+    authorId,
+    userId: authorId,
+    likes: 0,
+    createdAt: serverTimestamp(),
+  });
 };
 
 export const toggleSavePost = async (postId: string, userId: string, isSaved: boolean) => {

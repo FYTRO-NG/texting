@@ -98,7 +98,7 @@ export const evaluateContentSafety = (text: string): SafetyCheckResult => {
 
 export const blockUserInFirestore = async (targetUserId: string) => {
   const currentUserId = auth.currentUser?.uid;
-  if (!currentUserId) return;
+  if (!currentUserId || !targetUserId || currentUserId === targetUserId) return;
 
   const userRef = doc(db, "users", currentUserId);
   await updateDoc(userRef, {
@@ -106,9 +106,42 @@ export const blockUserInFirestore = async (targetUserId: string) => {
   });
 };
 
+export const unblockUserInFirestore = async (targetUserId: string) => {
+  const currentUserId = auth.currentUser?.uid;
+  if (!currentUserId || !targetUserId) return;
+
+  const userRef = doc(db, "users", currentUserId);
+  await updateDoc(userRef, {
+    blockedUsers: arrayRemove(targetUserId),
+  });
+};
+
+export const getBlockedUsersInFirestore = async (userId: string): Promise<string[]> => {
+  if (!userId) return [];
+  try {
+    const snap = await getDoc(doc(db, "users", userId));
+    if (snap.exists()) {
+      return (snap.data()?.blockedUsers as string[]) || [];
+    }
+  } catch (err) {
+    console.warn("Failed to get blocked users:", err);
+  }
+  return [];
+};
+
+export const isUserBlockedInFirestore = async (userId: string, targetUserId: string): Promise<boolean> => {
+  if (!userId || !targetUserId) return false;
+  try {
+    const blocked = await getBlockedUsersInFirestore(userId);
+    return blocked.includes(targetUserId);
+  } catch {
+    return false;
+  }
+};
+
 export const muteUserInFirestore = async (targetUserId: string) => {
   const currentUserId = auth.currentUser?.uid;
-  if (!currentUserId) return;
+  if (!currentUserId || !targetUserId) return;
 
   const userRef = doc(db, "users", currentUserId);
   await updateDoc(userRef, {
@@ -116,14 +149,28 @@ export const muteUserInFirestore = async (targetUserId: string) => {
   });
 };
 
+export const unmuteUserInFirestore = async (targetUserId: string) => {
+  const currentUserId = auth.currentUser?.uid;
+  if (!currentUserId || !targetUserId) return;
+
+  const userRef = doc(db, "users", currentUserId);
+  await updateDoc(userRef, {
+    mutedUsers: arrayRemove(targetUserId),
+  });
+};
+
 export const submitContentReport = async (data: {
-  targetType: "post" | "message" | "user" | "comment";
+  targetType: "post" | "message" | "user" | "comment" | "whisper" | "profile";
   targetId: string;
   targetContent?: string;
-  reason: "harassment" | "hate_speech" | "spam" | "threat_self_harm" | "impersonation" | "other";
+  reason: string;
   details?: string;
 }) => {
-  const currentUserId = auth.currentUser?.uid || "anon-user";
+  let currentUserId = auth.currentUser?.uid;
+  if (!currentUserId) {
+    const anon = await ensureAnonymousAuth().catch(() => null);
+    currentUserId = anon?.uid || "anon-user";
+  }
   const reportsRef = collection(db, "moderation_reports");
 
   await addDoc(reportsRef, {
