@@ -63,29 +63,28 @@ export default function WhisperSend() {
       return;
     }
 
-    // AI Moderation Evaluation Pipeline
-    const result = evaluateAIModeration(message, "anonymous_message");
-    setModerationResult(result);
+    // Moderation removed: deliver directly to Firestore
+    setModerationResult({
+      decision: "ALLOW",
+      riskLevel: "LOW",
+      categories: [],
+      confidence: 1.0,
+      reason: "Bypassed",
+      action: "Direct delivery",
+    });
 
-    if (result.decision === "REVIEW") {
-      await createModerationEventInFirestore(`msg_${Date.now()}`, "anonymous_message", result);
-    } else if (result.decision === "BLOCK") {
-      await createModerationEventInFirestore(`msg_${Date.now()}`, "anonymous_message", result);
-    } else {
-      // Allow -> Write whisper to Firestore
-      const ok = await sendWhisperInFirestore(displayHandle, message.trim(), mood);
-      if (!ok) {
-        setModerationResult({
-          decision: "BLOCK",
-          riskLevel: "HIGH",
-          categories: ["network_error"],
-          confidence: 1.0,
-          reason: "Delivery failed",
-          action: "Block delivery",
-        });
-        setSent(true);
-        return;
-      }
+    const ok = await sendWhisperInFirestore(displayHandle, message.trim(), mood);
+    if (!ok) {
+      setModerationResult({
+        decision: "BLOCK",
+        riskLevel: "HIGH",
+        categories: ["network_error"],
+        confidence: 1.0,
+        reason: "Delivery failed",
+        action: "Block delivery",
+      });
+      setSent(true);
+      return;
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
