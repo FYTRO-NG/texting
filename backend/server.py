@@ -2,7 +2,7 @@ import os
 import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -64,6 +64,18 @@ async def api_root():
         "database": "MongoDB Atlas" if os.environ.get("MONGO_URL") else "local"
     }
 
+@api_router.get("/health")
+async def health_check():
+    import database
+    db = database.get_database()
+    try:
+        if database.client:
+            await database.client.admin.command('ping')
+            return {"status": "ok", "mongo": "connected", "db_name": database.get_db_name()}
+        return {"status": "error", "mongo": "client is None"}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "type": type(e).__name__}
+
 # Register Feature Routers
 api_router.include_router(routes_auth.router)
 api_router.include_router(routes_posts.router)
@@ -99,7 +111,7 @@ if STATIC_DIR.exists():
     async def serve_spa(full_path: str):
         # Don't hijack API or uploads routes
         if full_path.startswith("api") or full_path.startswith("uploads") or full_path.startswith("docs"):
-            return None
+            raise HTTPException(status_code=404, detail="Not Found")
         file_path = STATIC_DIR / full_path
         if file_path.is_file():
             return FileResponse(file_path)
