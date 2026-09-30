@@ -35,8 +35,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Private Voices API", lifespan=lifespan)
 
+STATIC_DIR = Path(__file__).parent / "static"
+if not STATIC_DIR.exists():
+    ALT_STATIC = Path(__file__).parent.parent / "frontend" / "dist"
+    if ALT_STATIC.exists():
+        STATIC_DIR = ALT_STATIC
+
 @app.get("/")
 async def root():
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
     return {
         "service": "Private Voices API",
         "status": "online",
@@ -82,12 +91,6 @@ app.add_middleware(
 )
 
 # Mount Expo Web App (if exported to backend/static or frontend/dist)
-STATIC_DIR = Path(__file__).parent / "static"
-if not STATIC_DIR.exists():
-    ALT_STATIC = Path(__file__).parent.parent / "frontend" / "dist"
-    if ALT_STATIC.exists():
-        STATIC_DIR = ALT_STATIC
-
 if STATIC_DIR.exists():
     app.mount("/_expo", StaticFiles(directory=STATIC_DIR / "_expo"), name="expo")
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
