@@ -3,6 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "https://private-voices-api.onrender.com/api";
 const TOKEN_KEY = "@pv_auth_token";
 
+const USER_KEY = "@pv_auth_user";
+
 export async function getAuthToken(): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(TOKEN_KEY);
@@ -19,9 +21,26 @@ export async function setAuthToken(token: string): Promise<void> {
   }
 }
 
+export async function getUserData(): Promise<any | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setUserData(user: any): Promise<void> {
+  try {
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch (e) {
+    console.warn("Could not save user data:", e);
+  }
+}
+
 export async function clearAuthToken(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(TOKEN_KEY);
+    await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
   } catch (e) {
     console.warn("Could not clear auth token:", e);
   }

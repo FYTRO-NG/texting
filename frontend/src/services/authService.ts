@@ -14,7 +14,7 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } from "fir
 import { useEffect, useState } from "react";
 
 import { auth, db } from "../firebase";
-import { apiRequest, setAuthToken, clearAuthToken } from "./apiClient";
+import { apiRequest, setAuthToken, clearAuthToken, setUserData, getUserData } from "./apiClient";
 
 export { auth, db };
 
@@ -58,8 +58,21 @@ export const useAuthState = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check local FastAPI authenticated session
+    getUserData().then((localUser) => {
+      if (localUser && !user) {
+        setUser({
+          uid: localUser.uid || localUser._id,
+          email: localUser.email,
+          displayName: localUser.username,
+        } as any);
+      }
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+      if (firebaseUser) {
+        setUser(firebaseUser);
+      }
       setLoading(false);
     });
     return unsubscribe;
@@ -146,59 +159,48 @@ export const registerWithEmail = async (
   password: string,
   username: string
 ): Promise<User> => {
-  let user: User;
+  // 1. Primary: Register on FastAPI + MongoDB
+  let fastApiUser: any = null;
+  const apiRes = await apiRequest("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, username }),
+  });
 
+  if (apiRes.data?.access_token) {
+    await setAuthToken(apiRes.data.access_token);
+    if (apiRes.data.user) {
+      await setUserData(apiRes.data.user);
+      fastApiUser = apiRes.data.user;
+    }
+  } else if (apiRes.error && apiRes.status === 400) {
+    throw new Error(apiRes.error);
+  }
+
+  // 2. Secondary / Fallback: Firebase Auth bridge
+  let user: User;
   try {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     user = credential.user;
+    await updateProfile(user, { displayName: username }).catch(() => {});
   } catch (err: any) {
-    // Handle orphan account recovery: if email already exists in Auth, try sign in & profile repair
-    if (err?.code === "auth/email-already-in-use") {
-      try {
-        console.log("ℹ️ Email already exists in Auth, attempting sign-in & profile sync...");
-        const cred = await signInWithEmailAndPassword(auth, email, password);
-        user = cred.user;
-        await ensureUserProfile(user);
-        return user;
-      } catch (_) {
-        // Sign in with password failed — throw original email-in-use error
-        throw err;
-      }
+    // If Firebase fails or already exists, construct user object from FastAPI session
+    if (fastApiUser) {
+      return {
+        uid: fastApiUser.uid || fastApiUser._id,
+        email: fastApiUser.email,
+        displayName: fastApiUser.username,
+      } as any;
     }
     throw err;
   }
 
-  // Set display name on the Firebase Auth profile
-  try {
-    await updateProfile(user, { displayName: username });
-  } catch (e) {
-    console.warn("Could not update profile displayName:", e);
-  }
-
-  // Dual-Write to FastAPI + MongoDB backend
-  try {
-    const apiRes = await apiRequest("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password, username }),
-    });
-    if (apiRes.data?.access_token) {
-      await setAuthToken(apiRes.data.access_token);
-    }
-  } catch (backendErr) {
-    console.warn("FastAPI MongoDB registration sync:", backendErr);
-  }
+  // Sync to Firestore profile if available
   const userRef = doc(db, "users", user.uid);
   try {
     const snap = await getDoc(userRef);
     if (snap.exists()) {
-      // Document exists from onUserCreate — update profile fields safely without touching immutable fields
-      await updateDoc(userRef, {
-        username,
-        displayName: username,
-        email,
-      });
+      await updateDoc(userRef, { username, displayName: username, email });
     } else {
-      // Create fresh user profile document
       const profile: UserProfile = {
         uid: user.uid,
         username,
@@ -212,29 +214,13 @@ export const registerWithEmail = async (
         followersCount: 0,
         followingCount: 0,
         postsCount: 0,
-        privacy: {
-          anonymousMessagesEnabled: true,
-        },
+        privacy: { anonymousMessagesEnabled: true },
         joinedAt: serverTimestamp(),
       };
       await setDoc(userRef, profile);
     }
   } catch (e: any) {
-    console.error("🚨 FIRESTORE REGISTRATION WRITE ERROR:", {
-      name: e?.name,
-      code: e?.code,
-      message: e?.message,
-      path: `users/${user.uid}`,
-      databaseId: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices",
-    });
-    // Safely attempt repair via ensureUserProfile fallback
-    try {
-      await ensureUserProfile(user);
-    } catch (_) {
-      throw new Error(
-        "Account created, but profile setup failed: " + (e?.message || "Permission denied")
-      );
-    }
+    console.warn("Firestore profile sync skipped or failed (using MongoDB):", e?.message);
   }
 
   return user;
@@ -247,30 +233,37 @@ export const loginWithEmail = async (
   email: string,
   password: string
 ): Promise<User> => {
-  // Sync login with FastAPI backend
-  try {
-    const apiRes = await apiRequest("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    if (apiRes.data?.access_token) {
-      await setAuthToken(apiRes.data.access_token);
+  // 1. Primary: Authenticate via FastAPI + MongoDB
+  let fastApiUser: any = null;
+  const apiRes = await apiRequest("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (apiRes.data?.access_token) {
+    await setAuthToken(apiRes.data.access_token);
+    if (apiRes.data.user) {
+      await setUserData(apiRes.data.user);
+      fastApiUser = apiRes.data.user;
     }
-  } catch (backendErr) {
-    console.warn("FastAPI MongoDB login sync:", backendErr);
+  } else if (apiRes.error && apiRes.status === 401) {
+    throw new Error(apiRes.error);
   }
 
+  // 2. Secondary / Fallback: Firebase Auth bridge
   try {
     const credential = await signInWithEmailAndPassword(auth, email, password);
-    // Ensure Firestore profile exists and repair if orphan
-    await ensureUserProfile(credential.user);
+    await ensureUserProfile(credential.user).catch(() => {});
     return credential.user;
   } catch (e: any) {
-    console.error("🚨 LOGIN / PROFILE FETCH ERROR:", {
-      code: e?.code,
-      message: e?.message,
-      databaseId: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices",
-    });
+    // If Firebase Auth fails (or is bypassed), return session constructed from FastAPI
+    if (fastApiUser) {
+      return {
+        uid: fastApiUser.uid || fastApiUser._id,
+        email: fastApiUser.email,
+        displayName: fastApiUser.username,
+      } as any;
+    }
     throw e;
   }
 };
