@@ -196,6 +196,12 @@ export default function PublicProfile() {
 
   const feed = userPosts;
 
+  // Communities in common with this user — not yet implemented, render nothing safely
+  const commonCommunities: Array<{ id: string; emoji: string; name: string; members: string }> = [];
+
+  // Achievements/badges — safe fallback while not yet connected to Firestore
+  const achievements: Array<{ id: string; name: string; icon: string; color: string; unlocked: boolean }> = [];
+
   const onMessage = () => {
     if (isBlocked) {
       Alert.alert("Blocked", "You cannot message a blocked account.");
@@ -379,45 +385,49 @@ export default function PublicProfile() {
             <Ionicons name="chevron-forward" size={18} color={colors.onSurface} />
           </TouchableOpacity>
 
-          {/* Communities in common */}
-          <View style={styles.commonSection}>
-            <Text style={styles.sectionKicker}>In common</Text>
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>{commonCommunities.length} communities</Text>
-              <TouchableOpacity><Text style={styles.sectionLink}>View all</Text></TouchableOpacity>
+          {/* Communities in common — only shown when there is data */}
+          {commonCommunities.length > 0 && (
+            <View style={styles.commonSection}>
+              <Text style={styles.sectionKicker}>In common</Text>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>{commonCommunities.length} communities</Text>
+                <TouchableOpacity><Text style={styles.sectionLink}>View all</Text></TouchableOpacity>
+              </View>
+              <FlatList
+                horizontal
+                data={commonCommunities}
+                keyExtractor={(c) => c.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 10 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => router.push({ pathname: "/community/[id]", params: { id: item.id } } as any)}
+                    style={styles.commonCard}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.commonEmoji}>{item.emoji}</Text>
+                    <Text style={styles.commonName}>{item.name}</Text>
+                    <Text style={styles.commonMeta}>{item.members}</Text>
+                  </TouchableOpacity>
+                )}
+              />
             </View>
-            <FlatList
-              horizontal
-              data={commonCommunities}
-              keyExtractor={(c) => c.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 10 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => router.push({ pathname: "/community/[id]", params: { id: item.id } } as any)}
-                  style={styles.commonCard}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.commonEmoji}>{item.emoji}</Text>
-                  <Text style={styles.commonName}>{item.name}</Text>
-                  <Text style={styles.commonMeta}>{item.members}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
+          )}
 
-          {/* Badges */}
-          <View style={styles.section}>
-            <Text style={styles.sectionKicker}>Achievements</Text>
-            <View style={styles.badgesRow}>
-              {achievements.filter((a) => a.unlocked).map((a) => (
-                <View key={a.id} style={[styles.badge, { borderColor: a.color + "55", backgroundColor: a.color + "1F" }]}>
-                  <Ionicons name={a.icon as any} size={13} color={a.color} />
-                  <Text style={[styles.badgeText, { color: a.color }]}>{a.name}</Text>
-                </View>
-              ))}
+          {/* Badges — only shown when there are unlocked achievements */}
+          {achievements.filter((a) => a.unlocked).length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionKicker}>Achievements</Text>
+              <View style={styles.badgesRow}>
+                {achievements.filter((a) => a.unlocked).map((a) => (
+                  <View key={a.id} style={[styles.badge, { borderColor: a.color + "55", backgroundColor: a.color + "1F" }]}>
+                    <Ionicons name={a.icon as any} size={13} color={a.color} />
+                    <Text style={[styles.badgeText, { color: a.color }]}>{a.name}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Tabs */}
           <View style={styles.tabsRow}>
