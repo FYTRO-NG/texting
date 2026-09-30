@@ -28,11 +28,14 @@ async def connect_to_mongo():
     try:
         logger.info(f"Connecting to MongoDB at {mongo_url.split('@')[-1]}...")
         
-        # Use certifi CA file when connecting via SSL/TLS
+        # Use certifi CA file and explicit TLS configuration
         client_kwargs = {
             "serverSelectionTimeoutMS": 10000,
+            "connectTimeoutMS": 10000,
+            "socketTimeoutMS": 10000,
         }
         if "mongodb+srv://" in mongo_url or "ssl=true" in mongo_url.lower():
+            client_kwargs["tls"] = True
             client_kwargs["tlsCAFile"] = certifi.where()
 
         client = AsyncIOMotorClient(mongo_url, **client_kwargs)
@@ -55,8 +58,11 @@ def get_database():
         db_name = get_db_name()
         client_kwargs = {
             "serverSelectionTimeoutMS": 10000,
+            "connectTimeoutMS": 10000,
+            "socketTimeoutMS": 10000,
         }
         if "mongodb+srv://" in mongo_url or "ssl=true" in mongo_url.lower():
+            client_kwargs["tls"] = True
             client_kwargs["tlsCAFile"] = certifi.where()
         client = AsyncIOMotorClient(mongo_url, **client_kwargs)
         db = client[db_name]
