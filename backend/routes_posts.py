@@ -59,7 +59,8 @@ async def get_posts(
     hashtag: Optional[str] = None,
     current_user: Optional[dict] = Depends(get_optional_user)
 ):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         return []
 
     query = {}
@@ -68,7 +69,7 @@ async def get_posts(
     if hashtag:
         query["hashtags"] = hashtag.lower()
 
-    cursor = database.db.posts.find(query).sort("createdAt", -1).limit(min(limit, 100))
+    cursor = db.posts.find(query).sort("createdAt", -1).limit(min(limit, 100))
     posts = await cursor.to_list(length=limit)
     uid = current_user.get("uid") or current_user.get("_id") if current_user else None
     return [format_post(p, uid) for p in posts]
@@ -78,7 +79,8 @@ async def create_post(
     input_data: PostCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
 
     text = input_data.text.strip()
@@ -116,33 +118,34 @@ async def create_post(
         "createdAt": datetime.utcnow()
     }
 
-    await database.db.posts.insert_one(post_doc)
+    await db.posts.insert_one(post_doc)
     # Increment user's postsCount
-    await database.db.users.update_one({"_id": author_id}, {"$inc": {"postsCount": 1}})
+    await db.users.update_one({"_id": author_id}, {"$inc": {"postsCount": 1}})
 
     return format_post(post_doc, author_id)
 
 @router.post("/{post_id}/like")
 async def toggle_like(post_id: str, current_user: dict = Depends(get_current_user)):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     uid = current_user.get("uid") or current_user.get("_id")
-    post = await database.db.posts.find_one({"_id": post_id})
+    post = await db.posts.find_one({"_id": post_id})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
     liked_by = post.get("likedBy", [])
     if uid in liked_by:
         # Unlike
-        await database.db.posts.update_one(
+        await db.posts.update_one(
             {"_id": post_id},
             {"$pull": {"likedBy": uid}, "$inc": {"likes": -1}}
         )
         return {"liked": False}
     else:
         # Like
-        await database.db.posts.update_one(
+        await db.posts.update_one(
             {"_id": post_id},
             {"$addToSet": {"likedBy": uid}, "$inc": {"likes": 1}}
         )

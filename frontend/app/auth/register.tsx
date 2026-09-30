@@ -90,7 +90,8 @@ export default function Register() {
     } catch (err: any) {
       console.error("Account registration error:", err);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(getFriendlyError(err.code) || err.message || "Registration failed. Please try again.");
+      const friendly = err?.code ? getFriendlyError(err.code) : null;
+      setError(friendly || err?.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }

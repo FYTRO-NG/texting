@@ -172,7 +172,7 @@ export const registerWithEmail = async (
       await setUserData(apiRes.data.user);
       fastApiUser = apiRes.data.user;
     }
-  } else if (apiRes.error && apiRes.status === 400) {
+  } else if (apiRes.error) {
     throw new Error(apiRes.error);
   }
 
@@ -246,7 +246,7 @@ export const loginWithEmail = async (
       await setUserData(apiRes.data.user);
       fastApiUser = apiRes.data.user;
     }
-  } else if (apiRes.error && apiRes.status === 401) {
+  } else if (apiRes.error) {
     throw new Error(apiRes.error);
   }
 

@@ -17,12 +17,13 @@ async def get_active_stories(current_user: Optional[dict] = Depends(get_optional
     """
     Fetch all active, unexpired stories (created within the last 24 hours).
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         return []
 
     now = datetime.utcnow()
     # MongoDB query: expiresAt > now
-    cursor = database.db.stories.find({"expiresAt": {"$gt": now}}).sort("createdAt", 1)
+    cursor = db.stories.find({"expiresAt": {"$gt": now}}).sort("createdAt", 1)
     docs = await cursor.to_list(length=100)
 
     current_uid = current_user.get("uid") or current_user.get("_id") if current_user else None
@@ -63,7 +64,8 @@ async def create_story(
     """
     Publish a new story that expires automatically in 24 hours.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     story_id = str(uuid.uuid4())
@@ -88,7 +90,7 @@ async def create_story(
         "expiresAt": expires_at  # TTL index on MongoDB cleans this up automatically
     }
 
-    await database.db.stories.insert_one(story_doc)
+    await db.stories.insert_one(story_doc)
 
     return StoryOut(
         id=story_id,
@@ -114,11 +116,12 @@ async def record_story_view(
     """
     Atomically track viewer sub-document and increment viewCount only once per viewer.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     viewer_id = current_user.get("uid") or current_user.get("_id")
-    story = await database.db.stories.find_one({"_id": story_id})
+    story = await db.stories.find_one({"_id": story_id})
     if not story:
         raise HTTPException(status_code=404, detail="Story not found or expired")
 
@@ -127,7 +130,7 @@ async def record_story_view(
     already_viewed = any(v.get("userId") == viewer_id for v in viewers)
 
     if not already_viewed:
-        await database.db.stories.update_one(
+        await db.stories.update_one(
             {"_id": story_id},
             {
                 "$push": {"viewers": {"userId": viewer_id, "viewedAt": datetime.utcnow()}},
@@ -145,18 +148,19 @@ async def delete_story(
     """
     Allow only the story owner to delete their active story.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     current_uid = current_user.get("uid") or current_user.get("_id")
-    story = await database.db.stories.find_one({"_id": story_id})
+    story = await db.stories.find_one({"_id": story_id})
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
 
     if story.get("authorId") != current_uid:
         raise HTTPException(status_code=403, detail="You can only delete your own stories")
 
-    await database.db.stories.delete_one({"_id": story_id})
+    await db.stories.delete_one({"_id": story_id})
     return {"success": True}
 
 
@@ -167,10 +171,11 @@ async def get_communities(current_user: Optional[dict] = Depends(get_optional_us
     """
     List all communities with member counts and user joined state.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         return []
 
-    cursor = database.db.communities.find().sort("members", -1).limit(50)
+    cursor = db.communities.find().sort("members", -1).limit(50)
     docs = await cursor.to_list(length=50)
 
     # If no communities exist yet, seed standard Private Voices defaults
@@ -180,13 +185,13 @@ async def get_communities(current_user: Optional[dict] = Depends(get_optional_us
             {"_id": "mental-health", "name": "Deep Thoughts", "emoji": "🧠", "description": "Safe space for late night reflections", "members": 312, "gradient": ["#8B5CF6", "#EC4899"]},
             {"_id": "crypto", "name": "Decentralized", "emoji": "🔐", "description": "Cryptography, freedom and anonymous networks", "members": 89, "gradient": ["#10B981", "#06B6D4"]}
         ]
-        await database.db.communities.insert_many(defaults)
+        await db.communities.insert_many(defaults)
         docs = defaults
 
     current_uid = current_user.get("uid") or current_user.get("_id") if current_user else None
     user_memberships = set()
     if current_uid:
-        memberships = await database.db.community_members.find({"userId": current_uid}).to_list(100)
+        memberships = await db.community_members.find({"userId": current_uid}).to_list(100)
         user_memberships = {m.get("communityId") for m in memberships}
 
     results = []
@@ -213,7 +218,8 @@ async def create_community(
     """
     Create a new community and automatically join as the creator.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     creator_id = current_user.get("uid") or current_user.get("_id")
@@ -232,9 +238,9 @@ async def create_community(
         "createdAt": datetime.utcnow()
     }
 
-    await database.db.communities.insert_one(doc)
+    await db.communities.insert_one(doc)
     # Record membership
-    await database.db.community_members.insert_one({
+    await db.community_members.insert_one({
         "communityId": community_id,
         "userId": creator_id,
         "role": "owner",
@@ -260,32 +266,33 @@ async def toggle_join_community(
     """
     Join or leave a community.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     user_id = current_user.get("uid") or current_user.get("_id")
-    membership = await database.db.community_members.find_one({
+    membership = await db.community_members.find_one({
         "communityId": community_id,
         "userId": user_id
     })
 
     if membership:
         # Leave
-        await database.db.community_members.delete_one({"_id": membership["_id"]})
-        await database.db.communities.update_one(
+        await db.community_members.delete_one({"_id": membership["_id"]})
+        await db.communities.update_one(
             {"_id": community_id, "members": {"$gt": 0}},
             {"$inc": {"members": -1}}
         )
         return {"joined": False}
     else:
         # Join
-        await database.db.community_members.insert_one({
+        await db.community_members.insert_one({
             "communityId": community_id,
             "userId": user_id,
             "role": "member",
             "joinedAt": datetime.utcnow()
         })
-        await database.db.communities.update_one(
+        await db.communities.update_one(
             {"_id": community_id},
             {"$inc": {"members": 1}}
         )
@@ -299,11 +306,12 @@ async def get_user_chat_threads(current_user: dict = Depends(get_current_user)):
     """
     List user's active direct message threads.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         return []
 
     uid = current_user.get("uid") or current_user.get("_id")
-    cursor = database.db.chats.find({"participants": uid}).sort("updatedAt", -1).limit(50)
+    cursor = db.chats.find({"participants": uid}).sort("updatedAt", -1).limit(50)
     docs = await cursor.to_list(length=50)
 
     results = []
@@ -345,11 +353,12 @@ async def get_chat_messages(
     """
     Fetch message history for a conversation.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         return []
 
     uid = current_user.get("uid") or current_user.get("_id")
-    cursor = database.db.messages.find({"chatId": chat_id}).sort("createdAt", 1).limit(100)
+    cursor = db.messages.find({"chatId": chat_id}).sort("createdAt", 1).limit(100)
     docs = await cursor.to_list(length=100)
 
     results = []
@@ -385,7 +394,8 @@ async def send_chat_message(
     """
     Send a direct message in a conversation.
     """
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     uid = current_user.get("uid") or current_user.get("_id")
@@ -404,10 +414,10 @@ async def send_chat_message(
         "text": text,
         "createdAt": now
     }
-    await database.db.messages.insert_one(msg_doc)
+    await db.messages.insert_one(msg_doc)
 
     # Update thread's lastMessage and updatedAt
-    await database.db.chats.update_one(
+    await db.chats.update_one(
         {"_id": chat_id},
         {
             "$set": {"lastMessage": text, "updatedAt": now},

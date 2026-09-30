@@ -45,13 +45,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except JWTError:
         raise credentials_exception
 
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database not ready")
 
-    user = await database.db.users.find_one({"_id": user_id})
+    user = await db.users.find_one({"_id": user_id})
     if user is None:
         # Also check uid field for backwards compatibility
-        user = await database.db.users.find_one({"uid": user_id})
+        user = await db.users.find_one({"uid": user_id})
     if user is None:
         raise credentials_exception
     return user

@@ -14,7 +14,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=TokenResponse)
 async def register(input_data: UserRegister):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
     clean_username = input_data.username.strip()
@@ -24,13 +25,13 @@ async def register(input_data: UserRegister):
     username_lower = clean_username.lower().replace("@", "")
 
     # Check if username exists
-    existing_username = await database.db.users.find_one({"usernameLower": username_lower})
+    existing_username = await db.users.find_one({"usernameLower": username_lower})
     if existing_username:
         raise HTTPException(status_code=400, detail="Username is already taken")
 
     # Check if email exists
     clean_email = input_data.email.strip().lower()
-    existing_email = await database.db.users.find_one({"email": clean_email})
+    existing_email = await db.users.find_one({"email": clean_email})
     if existing_email:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
 
@@ -58,7 +59,7 @@ async def register(input_data: UserRegister):
         "createdAt": datetime.utcnow()
     }
 
-    await database.db.users.insert_one(user_doc)
+    await db.users.insert_one(user_doc)
 
     token = create_access_token({"sub": uid, "username": clean_username})
     safe_user = {k: v for k, v in user_doc.items() if k not in ["hashedPassword", "_id", "createdAt"]}
@@ -67,11 +68,12 @@ async def register(input_data: UserRegister):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(input_data: UserLogin):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
     clean_email = input_data.email.strip().lower()
-    user = await database.db.users.find_one({"email": clean_email})
+    user = await db.users.find_one({"email": clean_email})
     if not user:
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
@@ -105,9 +107,10 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 @router.get("/check-username/{username}")
 async def check_username(username: str):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
     clean_name = username.strip().lower().replace("@", "")
-    existing = await database.db.users.find_one({"usernameLower": clean_name})
+    existing = await db.users.find_one({"usernameLower": clean_name})
     return {"available": existing is None, "username": clean_name}

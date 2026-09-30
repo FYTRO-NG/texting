@@ -38,6 +38,18 @@ async def connect_to_mongo():
         logger.warning(f"Could not connect to MongoDB immediately: {e}")
         # Allow server to start even if offline or waiting for Atlas credentials
 
+def get_database():
+    global client, db
+    if db is None:
+        client_kwargs = {
+            "serverSelectionTimeoutMS": 10000,
+        }
+        if "mongodb+srv://" in MONGO_URL or "ssl=true" in MONGO_URL.lower():
+            client_kwargs["tlsCAFile"] = certifi.where()
+        client = AsyncIOMotorClient(MONGO_URL, **client_kwargs)
+        db = client[DB_NAME]
+    return db
+
 async def close_mongo_connection():
     global client
     if client:

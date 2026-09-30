@@ -15,7 +15,8 @@ async def send_whisper(
     input_data: WhisperCreate,
     current_user: Optional[dict] = Depends(get_optional_user)
 ):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     clean_handle = input_data.recipientHandle.strip().replace("@", "").lower()
@@ -23,7 +24,7 @@ async def send_whisper(
     if not text:
         raise HTTPException(status_code=400, detail="Whisper message cannot be empty")
 
-    target_user = await database.db.users.find_one({"usernameLower": clean_handle})
+    target_user = await db.users.find_one({"usernameLower": clean_handle})
     recipient_id = target_user.get("uid") or target_user.get("_id") if target_user else None
 
     whisper_id = str(uuid.uuid4())
@@ -40,12 +41,13 @@ async def send_whisper(
         "createdAt": datetime.utcnow()
     }
 
-    await database.db.whispers.insert_one(whisper_doc)
+    await db.whispers.insert_one(whisper_doc)
     return {"success": True, "whisperId": whisper_id}
 
 @router_whispers.get("/inbox", response_model=List[WhisperOut])
 async def get_my_whispers(current_user: dict = Depends(get_current_user)):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         return []
 
     handle = current_user.get("usernameLower", "")
@@ -58,7 +60,7 @@ async def get_my_whispers(current_user: dict = Depends(get_current_user)):
         ]
     }
 
-    cursor = database.db.whispers.find(query).sort("createdAt", -1).limit(100)
+    cursor = db.whispers.find(query).sort("createdAt", -1).limit(100)
     docs = await cursor.to_list(length=100)
 
     result = []
@@ -92,7 +94,8 @@ async def follow_user(
     action: FollowAction,
     current_user: dict = Depends(get_current_user)
 ):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     current_uid = current_user.get("uid") or current_user.get("_id")
@@ -101,13 +104,13 @@ async def follow_user(
     if current_uid == target_uid:
         raise HTTPException(status_code=400, detail="You cannot follow yourself")
 
-    target = await database.db.users.find_one({"_id": target_uid})
+    target = await db.users.find_one({"_id": target_uid})
     if not target:
-        target = await database.db.users.find_one({"uid": target_uid})
+        target = await db.users.find_one({"uid": target_uid})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
 
-    existing_follow = await database.db.follows.find_one({
+    existing_follow = await db.follows.find_one({
         "followerId": current_uid,
         "followingId": target_uid
     })
@@ -120,11 +123,11 @@ async def follow_user(
         "followingId": target_uid,
         "createdAt": datetime.utcnow()
     }
-    await database.db.follows.insert_one(follow_doc)
+    await db.follows.insert_one(follow_doc)
 
     # Increment counters atomically
-    await database.db.users.update_one({"_id": current_uid}, {"$inc": {"followingCount": 1}})
-    await database.db.users.update_one({"_id": target_uid}, {"$inc": {"followersCount": 1}})
+    await db.users.update_one({"_id": current_uid}, {"$inc": {"followingCount": 1}})
+    await db.users.update_one({"_id": target_uid}, {"$inc": {"followersCount": 1}})
 
     return {"success": True}
 
@@ -133,24 +136,25 @@ async def unfollow_user(
     action: FollowAction,
     current_user: dict = Depends(get_current_user)
 ):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     current_uid = current_user.get("uid") or current_user.get("_id")
     target_uid = action.targetUid
 
-    result = await database.db.follows.delete_one({
+    result = await db.follows.delete_one({
         "followerId": current_uid,
         "followingId": target_uid
     })
 
     if result.deleted_count > 0:
         # Decrement counters (ensure >= 0)
-        await database.db.users.update_one(
+        await db.users.update_one(
             {"_id": current_uid, "followingCount": {"$gt": 0}},
             {"$inc": {"followingCount": -1}}
         )
-        await database.db.users.update_one(
+        await db.users.update_one(
             {"_id": target_uid, "followersCount": {"$gt": 0}},
             {"$inc": {"followersCount": -1}}
         )
@@ -159,14 +163,15 @@ async def unfollow_user(
 
 @router_users.get("/profile/{handle}")
 async def get_public_profile(handle: str, current_user: Optional[dict] = Depends(get_optional_user)):
-    if database.db is None:
+    db = database.get_database()
+    if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     clean_name = handle.strip().replace("@", "").lower()
-    user = await database.db.users.find_one({"usernameLower": clean_name})
+    user = await db.users.find_one({"usernameLower": clean_name})
     if not user:
         # Try finding by direct ID
-        user = await database.db.users.find_one({"_id": handle})
+        user = await db.users.find_one({"_id": handle})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -174,7 +179,7 @@ async def get_public_profile(handle: str, current_user: Optional[dict] = Depends
     is_following = False
     if current_user:
         current_uid = current_user.get("uid") or current_user.get("_id")
-        follow_record = await database.db.follows.find_one({
+        follow_record = await db.follows.find_one({
             "followerId": current_uid,
             "followingId": target_uid
         })
