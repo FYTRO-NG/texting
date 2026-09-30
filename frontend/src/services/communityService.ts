@@ -44,6 +44,8 @@ const _createCommunity = httpsCallable<any, { success: boolean; communityId: str
 const _joinCommunity = httpsCallable<{ communityId: string }, { success: boolean; status: string }>(functions, "joinCommunity");
 const _leaveCommunity = httpsCallable<{ communityId: string }, { success: boolean; status: string }>(functions, "leaveCommunity");
 
+import { ensureAnonymousAuth } from "./authService";
+
 export const createCommunityInFirestore = async (data: {
   name: string;
   slug: string;
@@ -64,11 +66,26 @@ export const createCommunityInFirestore = async (data: {
   }
 
   // Fallback: Direct Firestore creation
+  let currentUser = auth?.currentUser;
+  if (!currentUser) {
+    currentUser = await ensureAnonymousAuth().catch(() => null);
+  }
+  const ownerId = currentUser?.uid;
+  if (!ownerId) {
+    throw new Error("You must be signed in to create a community.");
+  }
+
   const communityId = data.slug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, "");
   const commRef = doc(db, "communities", communityId);
-  const ownerId = auth?.currentUser?.uid || "anon-user";
+
+  // Check if community slug already exists
+  const existingSnap = await getDoc(commRef);
+  if (existingSnap.exists()) {
+    throw new Error(`The community handle "c/${communityId}" is already taken. Please choose another.`);
+  }
 
   await setDoc(commRef, {
+    id: communityId,
     name: data.name,
     slug: communityId,
     description: data.description,

@@ -168,8 +168,11 @@ service cloud.firestore {
 
     match /communities/{communityId} {
       allow read: if isAuthenticated() || (resource.data.visibility == 'public');
-      // Created only via createCommunity Cloud Function to enforce slug uniqueness & initial owner assignment
-      allow create: if false;
+      // Allow community creation directly by authenticated users (or Cloud Functions)
+      allow create: if isAuthenticated()
+          && (request.resource.data.ownerId == request.auth.uid)
+          && (request.resource.data.slug is string)
+          && (request.resource.data.name is string);
       allow update: if isAuthenticated()
           && (resource.data.ownerId == request.auth.uid)
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["ownerId", "slug", "createdAt", "memberCount", "postCount"]);
