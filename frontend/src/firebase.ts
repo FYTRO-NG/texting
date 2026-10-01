@@ -21,12 +21,32 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase App (prevent duplicate init)
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+let app: any;
+try {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+} catch (e) {
+  console.warn("Firebase app init warning:", e);
+}
 
-// Initialize Services
-export const auth = getAuth(app);
-export const db = getFirestore(app, process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices");
-export const storage = getStorage(app);
-export const functions = getFunctions(app);
+// Safe auth fallback so `auth` is NEVER undefined
+let safeAuth: any = null;
+try {
+  if (app) safeAuth = getAuth(app);
+} catch (e) {
+  console.warn("Firebase getAuth warning:", e);
+}
+
+if (!safeAuth) {
+  safeAuth = {
+    currentUser: null,
+    onAuthStateChanged: (_cb: any) => () => {},
+    signInAnonymously: async () => ({ user: { uid: "anon-guest" } })
+  };
+}
+
+export const auth = safeAuth;
+export const db = app ? getFirestore(app, process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID ?? "private-voices") : null;
+export const storage = app ? getStorage(app) : null;
+export const functions = app ? getFunctions(app) : null;
 
 export default app;

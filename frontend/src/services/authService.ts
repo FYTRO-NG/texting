@@ -30,6 +30,20 @@ export type AuthError = {
   message: string;
 };
 
+// Compatibility wrapper for components referencing `auth.currentUser`
+let _cachedUser: any = null;
+getUserData().then((u) => { _cachedUser = u; });
+
+export const auth = {
+  get currentUser() {
+    return _cachedUser ? {
+      uid: _cachedUser.uid || _cachedUser.id || _cachedUser._id,
+      displayName: _cachedUser.username || _cachedUser.displayName || "Anonymous",
+      email: _cachedUser.email,
+    } : null;
+  }
+};
+
 // ─── Auth State Hook ──────────────────────────────────────────────────────────
 
 export const useAuthState = () => {
