@@ -2,8 +2,8 @@ import os
 import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -34,6 +34,15 @@ async def lifespan(app: FastAPI):
     await close_mongo_connection()
 
 app = FastAPI(title="Private Voices API", lifespan=lifespan)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    logger.error(f"Global exception on {request.url.path}: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "type": type(exc).__name__, "path": request.url.path}
+    )
 
 STATIC_DIR = Path(__file__).parent / "static"
 if not STATIC_DIR.exists():
