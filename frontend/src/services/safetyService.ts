@@ -1,17 +1,5 @@
-import { db, auth } from "../firebase";
-import { ensureAnonymousAuth } from "./authService";
-import {
-  collection,
-  addDoc,
-  doc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-  serverTimestamp,
-  getDoc
-} from "firebase/firestore";
+import { apiRequest } from "./apiClient";
 
-// Local state tracking for client-side rate limiting
 const userLastActions: Record<string, number[]> = {};
 
 export type SafetyCheckResult = {
@@ -21,7 +9,6 @@ export type SafetyCheckResult = {
   toxicityScore: number;
 };
 
-// Common profanity and threat patterns
 const PROFANITY_PATTERNS = [
   /\b(fuck|shit|bitch|asshole|cunt|dick|pussy)\b/i,
 ];
@@ -32,23 +19,17 @@ const THREAT_HARASSMENT_PATTERNS = [
 ];
 
 export const checkRateLimit = (actionType: "post" | "message" | "comment"): boolean => {
-  const userId = auth.currentUser?.uid || "anon-user";
-  const key = `${userId}_${actionType}`;
+  const key = `user_${actionType}`;
   const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute window
+  const windowMs = 60 * 1000;
 
   if (!userLastActions[key]) {
     userLastActions[key] = [];
   }
 
-  // Filter actions in current window
   userLastActions[key] = userLastActions[key].filter((t) => now - t < windowMs);
 
-  const limits = {
-    post: 5,
-    message: 12,
-    comment: 8,
-  };
+  const limits = { post: 5, message: 12, comment: 8 };
 
   if (userLastActions[key].length >= limits[actionType]) {
     return false;
@@ -65,7 +46,6 @@ export const evaluateContentSafety = (text: string): SafetyCheckResult => {
 
   let toxicityScore = 0;
 
-  // 1. Check severe threats & harassment
   for (const pattern of THREAT_HARASSMENT_PATTERNS) {
     if (pattern.test(text)) {
       return {
@@ -77,7 +57,6 @@ export const evaluateContentSafety = (text: string): SafetyCheckResult => {
     }
   }
 
-  // 2. Check profanity
   for (const pattern of PROFANITY_PATTERNS) {
     if (pattern.test(text)) {
       toxicityScore += 40;
@@ -97,66 +76,29 @@ export const evaluateContentSafety = (text: string): SafetyCheckResult => {
 };
 
 export const blockUserInFirestore = async (targetUserId: string) => {
-  const currentUserId = auth.currentUser?.uid;
-  if (!currentUserId || !targetUserId || currentUserId === targetUserId) return;
-
-  const userRef = doc(db, "users", currentUserId);
-  await updateDoc(userRef, {
-    blockedUsers: arrayUnion(targetUserId),
-  });
+  await apiRequest(`/social/block/${targetUserId}`, { method: "POST" });
 };
 
 export const unblockUserInFirestore = async (targetUserId: string) => {
-  const currentUserId = auth.currentUser?.uid;
-  if (!currentUserId || !targetUserId) return;
-
-  const userRef = doc(db, "users", currentUserId);
-  await updateDoc(userRef, {
-    blockedUsers: arrayRemove(targetUserId),
-  });
+  await apiRequest(`/social/unblock/${targetUserId}`, { method: "POST" });
 };
 
 export const getBlockedUsersInFirestore = async (userId: string): Promise<string[]> => {
-  if (!userId) return [];
-  try {
-    const snap = await getDoc(doc(db, "users", userId));
-    if (snap.exists()) {
-      return (snap.data()?.blockedUsers as string[]) || [];
-    }
-  } catch (err) {
-    console.warn("Failed to get blocked users:", err);
-  }
-  return [];
+  const res = await apiRequest(`/social/blocked-users`);
+  return res.data || [];
 };
 
 export const isUserBlockedInFirestore = async (userId: string, targetUserId: string): Promise<boolean> => {
-  if (!userId || !targetUserId) return false;
-  try {
-    const blocked = await getBlockedUsersInFirestore(userId);
-    return blocked.includes(targetUserId);
-  } catch {
-    return false;
-  }
+  const blocked = await getBlockedUsersInFirestore(userId);
+  return blocked.includes(targetUserId);
 };
 
 export const muteUserInFirestore = async (targetUserId: string) => {
-  const currentUserId = auth.currentUser?.uid;
-  if (!currentUserId || !targetUserId) return;
-
-  const userRef = doc(db, "users", currentUserId);
-  await updateDoc(userRef, {
-    mutedUsers: arrayUnion(targetUserId),
-  });
+  await apiRequest(`/social/mute/${targetUserId}`, { method: "POST" });
 };
 
 export const unmuteUserInFirestore = async (targetUserId: string) => {
-  const currentUserId = auth.currentUser?.uid;
-  if (!currentUserId || !targetUserId) return;
-
-  const userRef = doc(db, "users", currentUserId);
-  await updateDoc(userRef, {
-    mutedUsers: arrayRemove(targetUserId),
-  });
+  await apiRequest(`/social/unmute/${targetUserId}`, { method: "POST" });
 };
 
 export const submitContentReport = async (data: {
@@ -166,18 +108,9 @@ export const submitContentReport = async (data: {
   reason: string;
   details?: string;
 }) => {
-  let currentUserId = auth.currentUser?.uid;
-  if (!currentUserId) {
-    const anon = await ensureAnonymousAuth().catch(() => null);
-    currentUserId = anon?.uid || "anon-user";
-  }
-  const reportsRef = collection(db, "moderation_reports");
-
-  await addDoc(reportsRef, {
-    reporterId: currentUserId,
-    ...data,
-    status: "pending",
-    createdAt: serverTimestamp(),
+  await apiRequest("/social/reports", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 };
 
@@ -186,14 +119,9 @@ export const submitUserAppeal = async (data: {
   reason: string;
   contactEmail?: string;
 }) => {
-  const currentUserId = auth?.currentUser?.uid || "anon-user";
-  const appealsRef = collection(db, "user_appeals");
-
-  await addDoc(appealsRef, {
-    userId: currentUserId,
-    ...data,
-    status: "pending",
-    createdAt: serverTimestamp(),
+  await apiRequest("/social/appeals", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 };
 
@@ -203,17 +131,8 @@ export const submitBugReport = async (data: {
   category?: string;
   platform?: string;
 }) => {
-  let user = auth?.currentUser;
-  if (!user) {
-    user = await ensureAnonymousAuth().catch(() => null);
-  }
-  const currentUserId = user?.uid || "anon-user";
-  const bugsRef = collection(db, "bug_reports");
-
-  await addDoc(bugsRef, {
-    userId: currentUserId,
-    ...data,
-    status: "OPEN",
-    createdAt: serverTimestamp(),
+  await apiRequest("/social/bugs", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 };

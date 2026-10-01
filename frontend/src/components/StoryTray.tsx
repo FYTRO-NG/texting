@@ -11,7 +11,6 @@ import {
 } from "react-native";
 
 import Avatar from "@/src/components/Avatar";
-import { auth } from "@/src/firebase";
 import {
   StoryAuthorGroup,
   subscribeToActiveStories,

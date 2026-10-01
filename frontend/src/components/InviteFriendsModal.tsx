@@ -14,7 +14,6 @@ import {
 } from "react-native";
 
 import { colors, font, radii, spacing } from "@/src/theme";
-import { auth } from "@/src/firebase";
 
 type Props = {
   visible: boolean;

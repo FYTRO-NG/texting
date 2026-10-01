@@ -1,22 +1,3 @@
-import { auth, db, functions } from "../firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  increment,
-  arrayUnion,
-  arrayRemove,
-  onSnapshot,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp,
-} from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import { Community } from "../mockData";
 import { apiRequest } from "./apiClient";
 
@@ -40,13 +21,6 @@ export interface CommunityFull {
   createdAt?: any;
 }
 
-// ─── Callables ───
-const _createCommunity = httpsCallable<any, { success: boolean; communityId: string }>(functions, "createCommunity");
-const _joinCommunity = httpsCallable<{ communityId: string }, { success: boolean; status: string }>(functions, "joinCommunity");
-const _leaveCommunity = httpsCallable<{ communityId: string }, { success: boolean; status: string }>(functions, "leaveCommunity");
-
-import { ensureAnonymousAuth } from "./authService";
-
 export const createCommunityInFirestore = async (data: {
   name: string;
   slug: string;
@@ -58,153 +32,36 @@ export const createCommunityInFirestore = async (data: {
   allowAnonymousPosts: boolean;
   avatarUrl?: string;
   coverUrl?: string;
-}): Promise<{ success: boolean; communityId: string }> => {
-  try {
-    const result = await _createCommunity(data);
-    if (result.data && result.data.success) return result.data;
-  } catch (funcErr) {
-    console.warn("Cloud Function createCommunity unavailable, falling back to direct Firestore:", funcErr);
-  }
-
-  // Fallback: Direct Firestore creation
-  let currentUser = auth?.currentUser;
-  if (!currentUser) {
-    currentUser = await ensureAnonymousAuth().catch(() => null);
-  }
-  const ownerId = currentUser?.uid;
-  if (!ownerId) {
-    throw new Error("You must be signed in to create a community.");
-  }
-
-  const communityId = data.slug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, "");
-  const commRef = doc(db, "communities", communityId);
-
-  // Check if community slug already exists
-  const existingSnap = await getDoc(commRef);
-  if (existingSnap.exists()) {
-    throw new Error(`The community handle "c/${communityId}" is already taken. Please choose another.`);
-  }
-
-  await setDoc(commRef, {
-    id: communityId,
-    name: data.name,
-    slug: communityId,
-    description: data.description,
-    category: data.category,
-    visibility: data.visibility,
-    requireApproval: data.requireApproval,
-    allowAnonymousPosts: data.allowAnonymousPosts,
-    rules: data.rules,
-    avatarUrl: data.avatarUrl || null,
-    coverUrl: data.coverUrl || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
-    ownerId,
-    memberCount: 1,
-    postCount: 0,
-    createdAt: serverTimestamp(),
+  emoji?: string;
+}) => {
+  const apiRes = await apiRequest("/features/communities", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 
-  // Dual-write to FastAPI MongoDB backend
-  try {
-    await apiRequest("/communities", {
-      method: "POST",
-      body: JSON.stringify({
-        name: data.name,
-        description: data.description,
-        cover: data.coverUrl,
-      }),
-    });
-  } catch (backendErr) {
-    console.warn("FastAPI MongoDB community sync:", backendErr);
+  if (apiRes.error) {
+    throw new Error(apiRes.error);
   }
-
-  return { success: true, communityId };
+  return apiRes.data;
 };
 
-export const joinCommunityCallable = async (communityId: string) => {
-  const result = await _joinCommunity({ communityId });
-  return result.data;
+export const joinCommunityInFirestore = async (communityId: string) => {
+  await apiRequest(`/features/communities/${communityId}/join`, { method: "POST" });
 };
 
-export const leaveCommunityCallable = async (communityId: string) => {
-  const result = await _leaveCommunity({ communityId });
-  return result.data;
+export const leaveCommunityInFirestore = async (communityId: string) => {
+  await apiRequest(`/features/communities/${communityId}/leave`, { method: "POST" });
 };
 
 export const subscribeToCommunities = (callback: (communities: Community[]) => void) => {
-  const commRef = collection(db, "communities");
-  return onSnapshot(
-    commRef,
-    (snapshot) => {
-      const list: Community[] = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name,
-          emoji: data.emoji || "💬",
-          description: data.description,
-          members: `${data.memberCount || 0} members`,
-          cover: data.coverUrl || data.cover || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
-          gradient: data.gradient || ["#06B6D4", "#0284C7"],
-          joined: false,
-        };
-      });
-      callback(list);
-    },
-    (err) => {
-      console.warn("Firestore communities listener subscription warning:", err);
-      callback([]);
-    }
-  );
+  let isMounted = true;
+  apiRequest("/features/communities").then((res) => {
+    if (res.data && isMounted) callback(res.data);
+  });
+  return () => { isMounted = false; };
 };
 
-export const getCommunityDetails = async (idOrSlug: string): Promise<CommunityFull | null> => {
-  const ref = doc(db, "communities", idOrSlug);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const data = snap.data();
-    return {
-      id: snap.id,
-      name: data.name,
-      slug: data.slug || snap.id,
-      description: data.description,
-      category: data.category || "General",
-      visibility: data.visibility || "public",
-      requireApproval: !!data.requireApproval,
-      allowAnonymousPosts: data.allowAnonymousPosts !== false,
-      avatarUrl: data.avatarUrl,
-      coverUrl: data.coverUrl || data.cover,
-      emoji: data.emoji || "💬",
-      ownerId: data.ownerId,
-      memberCount: data.memberCount || 0,
-      postCount: data.postCount || 0,
-      rules: data.rules || [
-        "Be kind and respectful to all members.",
-        "No harassment, hate speech, or targeted hate.",
-        "Respect poster anonymity at all times.",
-        "Keep discussions relevant to the community category."
-      ],
-      createdAt: data.createdAt,
-    };
-  }
-  return null;
-};
-
-export const toggleJoinCommunityInFirestore = async (
-  communityId: string,
-  userId: string,
-  currentlyJoined: boolean
-) => {
-  if (currentlyJoined) {
-    await leaveCommunityCallable(communityId).catch(async () => {
-      // Fallback client update
-      await updateDoc(doc(db, "users", userId), { joinedCommunities: arrayRemove(communityId) });
-      await updateDoc(doc(db, "communities", communityId), { memberCount: increment(-1) });
-    });
-  } else {
-    await joinCommunityCallable(communityId).catch(async () => {
-      // Fallback client update
-      await updateDoc(doc(db, "users", userId), { joinedCommunities: arrayUnion(communityId) });
-      await updateDoc(doc(db, "communities", communityId), { memberCount: increment(1) });
-    });
-  }
+export const getCommunityBySlug = async (slug: string): Promise<CommunityFull | null> => {
+  const res = await apiRequest(`/features/communities/${slug}`);
+  return res.data || null;
 };

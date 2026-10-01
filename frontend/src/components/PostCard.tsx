@@ -16,9 +16,7 @@ import {
   repostPostInFirestore,
   voteOnPollInFirestore,
 } from "../services/postService";
-import { blockUserInFirestore } from "../services/safetyService";
 import ReportModal from "./ReportModal";
-import { auth } from "../firebase";
 
 type Props = { post: Post };
 
