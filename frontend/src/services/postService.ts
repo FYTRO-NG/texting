@@ -49,6 +49,9 @@ export const createPostInFirestore = async (postData: CreatePostInput) => {
       visibility: postData.visibility
     }),
   });
+  if (apiRes.error) {
+    throw new Error(apiRes.error);
+  }
   return apiRes.data || { id: "post_" + Date.now() };
 };
 

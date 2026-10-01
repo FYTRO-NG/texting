@@ -36,7 +36,7 @@ export const createStoryInFirestore = async (input: {
   mediaUrl?: string;
   backgroundColor?: string;
 }) => {
-  const res = await apiRequest("/features/stories", {
+  const res = await apiRequest("/stories", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -48,16 +48,37 @@ export const subscribeToStoryTray = (
   callback: (groups: StoryAuthorGroup[]) => void
 ) => {
   let isMounted = true;
-  apiRequest("/features/stories/feed").then((res) => {
-    if (res.data && isMounted) callback(res.data);
+  apiRequest("/stories").then((res) => {
+    if (res.data && isMounted) {
+      // Group stories by author
+      const groupedMap: Record<string, StoryAuthorGroup> = {};
+      (res.data as Story[]).forEach((story) => {
+        if (!groupedMap[story.authorId]) {
+          groupedMap[story.authorId] = {
+            authorId: story.authorId,
+            authorUsername: story.authorUsername,
+            authorDisplayName: story.authorDisplayName,
+            authorAvatarIcon: story.authorAvatarIcon,
+            authorAvatarGradient: story.authorAvatarGradient,
+            stories: [],
+            hasUnviewed: false,
+          };
+        }
+        groupedMap[story.authorId].stories.push(story);
+        if (!(story as any).viewed) {
+          groupedMap[story.authorId].hasUnviewed = true;
+        }
+      });
+      callback(Object.values(groupedMap));
+    }
   });
   return () => { isMounted = false; };
 };
 
 export const recordStoryViewInFirestore = async (storyId: string) => {
-  await apiRequest(`/features/stories/${storyId}/view`, { method: "POST" });
+  await apiRequest(`/stories/${storyId}/view`, { method: "POST" });
 };
 
 export const deleteStoryInFirestore = async (storyId: string) => {
-  await apiRequest(`/features/stories/${storyId}`, { method: "DELETE" });
+  await apiRequest(`/stories/${storyId}`, { method: "DELETE" });
 };

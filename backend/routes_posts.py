@@ -77,7 +77,7 @@ async def get_posts(
 @router.post("", response_model=PostOut)
 async def create_post(
     input_data: PostCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: Optional[dict] = Depends(get_optional_user)
 ):
     db = database.get_database()
     if db is None:
@@ -90,7 +90,17 @@ async def create_post(
         raise HTTPException(status_code=400, detail="Post text exceeds 2000 characters")
 
     post_id = str(uuid.uuid4())
-    author_id = current_user.get("uid") or current_user.get("_id")
+    if current_user:
+        author_id = current_user.get("uid") or current_user.get("_id")
+        username = current_user.get("username", "Anonymous")
+        avatar_color = current_user.get("avatarGradient", ["#06B6D4", "#0284C7"])
+        avatar_icon = current_user.get("avatarIcon", "flash")
+    else:
+        author_id = str(uuid.uuid4())
+        username = f"Voice_{uuid.uuid4().hex[:5]}"
+        avatar_color = ["#06B6D4", "#0284C7"]
+        avatar_icon = "flash"
+
     hashtags = parse_hashtags(text)
 
     post_doc = {
@@ -98,9 +108,9 @@ async def create_post(
         "id": post_id,
         "authorId": author_id,
         "userId": author_id,
-        "username": current_user.get("username", "Anonymous"),
-        "avatarColor": current_user.get("avatarGradient", ["#06B6D4", "#0284C7"]),
-        "avatarIcon": current_user.get("avatarIcon", "flash"),
+        "username": username,
+        "avatarColor": avatar_color,
+        "avatarIcon": avatar_icon,
         "community": input_data.community or "General",
         "communityEmoji": input_data.communityEmoji or "💬",
         "text": text,

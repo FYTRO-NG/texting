@@ -213,7 +213,7 @@ async def get_communities(current_user: Optional[dict] = Depends(get_optional_us
 @router_communities.post("", response_model=CommunityOut)
 async def create_community(
     input_data: CommunityCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: Optional[dict] = Depends(get_optional_user)
 ):
     """
     Create a new community and automatically join as the creator.
@@ -222,16 +222,22 @@ async def create_community(
     if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    creator_id = current_user.get("uid") or current_user.get("_id")
+    creator_id = (current_user.get("uid") or current_user.get("_id")) if current_user else str(uuid.uuid4())
     community_id = str(uuid.uuid4())
 
+    slug = input_data.slug.strip().lower() if input_data.slug else community_id[:8]
     doc = {
         "_id": community_id,
         "id": community_id,
+        "slug": slug,
         "name": input_data.name.strip(),
         "emoji": input_data.emoji or "💬",
         "description": input_data.description or "",
         "cover": input_data.cover,
+        "category": input_data.category or "General",
+        "visibility": input_data.visibility or "public",
+        "rules": input_data.rules or [],
+        "allowAnonymousPosts": input_data.allowAnonymousPosts if input_data.allowAnonymousPosts is not None else True,
         "gradient": input_data.gradient or ["#8B5CF6", "#06B6D4"],
         "members": 1,
         "ownerId": creator_id,
@@ -249,13 +255,15 @@ async def create_community(
 
     return CommunityOut(
         id=community_id,
+        communityId=community_id,
         name=doc["name"],
         emoji=doc["emoji"],
         description=doc["description"],
         members=1,
         cover=doc["cover"],
         gradient=doc["gradient"],
-        joined=True
+        joined=True,
+        success=True
     )
 
 @router_communities.post("/{community_id}/join")

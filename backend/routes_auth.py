@@ -93,6 +93,46 @@ async def login(input_data: UserLogin):
 
     return TokenResponse(access_token=token, user=safe_user)
 
+@router.post("/anonymous", response_model=TokenResponse)
+async def login_anonymous():
+    """
+    Generate or provision an anonymous user session with a valid JWT token.
+    """
+    db = database.get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+
+    uid = str(uuid.uuid4())
+    random_num = uuid.uuid4().hex[:5]
+    guest_username = f"Voice_{random_num}"
+
+    user_doc = {
+        "_id": uid,
+        "uid": uid,
+        "email": None,
+        "hashedPassword": None,
+        "username": guest_username,
+        "usernameLower": guest_username.lower(),
+        "displayName": guest_username,
+        "avatarIcon": "flash",
+        "avatarGradient": ["#06B6D4", "#3B82F6"],
+        "themeColor": "#8B5CF6",
+        "bio": "Exploring Private Voices anonymously",
+        "reputationScore": 100,
+        "anonymityLevel": 100,
+        "followersCount": 0,
+        "followingCount": 0,
+        "postsCount": 0,
+        "joinedAt": datetime.utcnow().isoformat(),
+        "createdAt": datetime.utcnow()
+    }
+
+    await db.users.insert_one(user_doc)
+    token = create_access_token({"sub": uid, "username": guest_username})
+    safe_user = {k: v for k, v in user_doc.items() if k not in ["hashedPassword", "_id", "createdAt"]}
+
+    return TokenResponse(access_token=token, user=safe_user)
+
 @router.get("/me", response_model=UserProfileOut)
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserProfileOut(

@@ -15,7 +15,7 @@ export const subscribeToChatThreads = (
   callback: (threads: ChatThread[]) => void
 ) => {
   let isMounted = true;
-  apiRequest("/features/chats").then((res) => {
+  apiRequest("/chats").then((res) => {
     if (res.data && isMounted) callback(res.data);
   });
   return () => { isMounted = false; };
@@ -28,7 +28,7 @@ export const subscribeToChatMessages = (
 ) => {
   let isMounted = true;
   const fetchMessages = async () => {
-    const res = await apiRequest(`/features/chats/${threadId}/messages`);
+    const res = await apiRequest(`/chats/${threadId}/messages`);
     if (res.data && isMounted) {
       callback(res.data);
     }
@@ -47,7 +47,7 @@ export const sendMessageInFirestore = async (
   text: string,
   otherUserId?: string
 ) => {
-  await apiRequest(`/features/chats/${threadId}/messages`, {
+  await apiRequest(`/chats/${threadId}/messages`, {
     method: "POST",
     body: JSON.stringify({ text, recipientId: otherUserId }),
   });
@@ -58,7 +58,7 @@ export const createOrGetChatThread = async (
   otherUserId: string,
   otherUserData?: { nickname: string; avatarColor: [string, string]; avatarIcon: string }
 ): Promise<string> => {
-  const res = await apiRequest("/features/chats", {
+  const res = await apiRequest("/chats", {
     method: "POST",
     body: JSON.stringify({ recipientId: otherUserId }),
   });

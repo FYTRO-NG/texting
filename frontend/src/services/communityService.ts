@@ -34,7 +34,7 @@ export const createCommunityInFirestore = async (data: {
   coverUrl?: string;
   emoji?: string;
 }) => {
-  const apiRes = await apiRequest("/features/communities", {
+  const apiRes = await apiRequest("/communities", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -46,22 +46,22 @@ export const createCommunityInFirestore = async (data: {
 };
 
 export const joinCommunityInFirestore = async (communityId: string) => {
-  await apiRequest(`/features/communities/${communityId}/join`, { method: "POST" });
+  await apiRequest(`/communities/${communityId}/join`, { method: "POST" });
 };
 
 export const leaveCommunityInFirestore = async (communityId: string) => {
-  await apiRequest(`/features/communities/${communityId}/leave`, { method: "POST" });
+  await apiRequest(`/communities/${communityId}/leave`, { method: "POST" });
 };
 
 export const subscribeToCommunities = (callback: (communities: Community[]) => void) => {
   let isMounted = true;
-  apiRequest("/features/communities").then((res) => {
+  apiRequest("/communities").then((res) => {
     if (res.data && isMounted) callback(res.data);
   });
   return () => { isMounted = false; };
 };
 
 export const getCommunityBySlug = async (slug: string): Promise<CommunityFull | null> => {
-  const res = await apiRequest(`/features/communities/${slug}`);
+  const res = await apiRequest(`/communities/${slug}`);
   return res.data || null;
 };

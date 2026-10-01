@@ -118,6 +118,26 @@ export const loginWithEmail = async (
   throw new Error("Login failed");
 };
 
+// ─── Anonymous Authentication ─────────────────────────────────────────────────
+
+export const ensureAnonymousAuth = async (): Promise<any> => {
+  const localUser = await getUserData();
+  const token = await apiRequest("/auth/me");
+  if (localUser && token.data) {
+    return localUser;
+  }
+
+  const res = await apiRequest("/auth/anonymous", { method: "POST" });
+  if (res.data?.access_token) {
+    await setAuthToken(res.data.access_token);
+    if (res.data.user) {
+      await setUserData(res.data.user);
+      return res.data.user;
+    }
+  }
+  return localUser || { uid: "anon_" + Date.now(), username: "Anonymous" };
+};
+
 // ─── Password Reset ───────────────────────────────────────────────────────────
 
 export const resetPassword = async (email: string): Promise<void> => {

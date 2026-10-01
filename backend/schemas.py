@@ -117,9 +117,15 @@ class StoryOut(BaseModel):
 # --- Community Models ---
 class CommunityCreate(BaseModel):
     name: str
+    slug: Optional[str] = None
     emoji: Optional[str] = "💬"
     description: Optional[str] = ""
     cover: Optional[str] = None
+    category: Optional[str] = None
+    visibility: Optional[str] = "public"
+    requireApproval: Optional[bool] = False
+    rules: Optional[List[str]] = []
+    allowAnonymousPosts: Optional[bool] = True
     gradient: Optional[List[str]] = ["#8B5CF6", "#06B6D4"]
 
 class CommunityOut(BaseModel):
@@ -131,6 +137,8 @@ class CommunityOut(BaseModel):
     cover: Optional[str] = None
     gradient: List[str]
     joined: bool = False
+    success: bool = True
+    communityId: Optional[str] = None
 
 # --- Chat Models ---
 class ChatMessageCreate(BaseModel):

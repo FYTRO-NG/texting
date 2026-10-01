@@ -28,6 +28,7 @@ import { auth } from "@/src/firebase";
 import { AVATAR_GRADIENTS } from "@/src/mockData";
 import { evaluateAIModeration } from "@/src/services/aiModerationService";
 import { getUserProfile, ensureAnonymousAuth, UserProfile } from "@/src/services/authService";
+import { getUserData } from "@/src/services/apiClient";
 import { subscribeToCommunities } from "@/src/services/communityService";
 import { uploadPostImages } from "@/src/services/mediaService";
 import { createPostInFirestore, ReplyPermission } from "@/src/services/postService";
@@ -70,12 +71,18 @@ export default function CreatePostScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const uid = auth?.currentUser?.uid;
-    if (uid) {
-      getUserProfile(uid).then((prof) => {
-        if (prof) setUserProfile(prof);
-      });
-    }
+    getUserData().then((u) => {
+      if (u) {
+        setUserProfile(u);
+      } else {
+        const uid = auth?.currentUser?.uid;
+        if (uid) {
+          getUserProfile(uid).then((prof) => {
+            if (prof) setUserProfile(prof);
+          });
+        }
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -216,9 +223,10 @@ export default function CreatePostScreen() {
     setSubmitting(true);
     setUploadProgress(0);
 
+    const localUser = await getUserData();
     const currentUser =
-      auth?.currentUser || (await ensureAnonymousAuth().catch(() => null));
-    const userId = currentUser?.uid || "anon-user";
+      localUser || auth?.currentUser || (await ensureAnonymousAuth().catch(() => null));
+    const userId = currentUser?.uid || currentUser?.id || currentUser?._id || "anon-user";
 
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
