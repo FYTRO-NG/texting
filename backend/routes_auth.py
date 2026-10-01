@@ -14,57 +14,64 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=TokenResponse)
 async def register(input_data: UserRegister):
-    db = database.get_database()
-    if db is None:
-        raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+    try:
+        db = database.get_database()
+        if db is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
-    clean_username = input_data.username.strip()
-    if len(clean_username) < 3 or len(clean_username) > 30:
-        raise HTTPException(status_code=400, detail="Username must be between 3 and 30 characters")
+        clean_username = input_data.username.strip()
+        if len(clean_username) < 3 or len(clean_username) > 30:
+            raise HTTPException(status_code=400, detail="Username must be between 3 and 30 characters")
 
-    username_lower = clean_username.lower().replace("@", "")
+        username_lower = clean_username.lower().replace("@", "")
 
-    # Check if username exists
-    existing_username = await db.users.find_one({"usernameLower": username_lower})
-    if existing_username:
-        raise HTTPException(status_code=400, detail="Username is already taken")
+        # Check if username exists
+        existing_username = await db.users.find_one({"usernameLower": username_lower})
+        if existing_username:
+            raise HTTPException(status_code=400, detail="Username is already taken")
 
-    # Check if email exists
-    clean_email = input_data.email.strip().lower()
-    existing_email = await db.users.find_one({"email": clean_email})
-    if existing_email:
-        raise HTTPException(status_code=400, detail="An account with this email already exists")
+        # Check if email exists
+        clean_email = input_data.email.strip().lower()
+        existing_email = await db.users.find_one({"email": clean_email})
+        if existing_email:
+            raise HTTPException(status_code=400, detail="An account with this email already exists")
 
-    uid = str(uuid.uuid4())
-    hashed_pwd = get_password_hash(input_data.password)
+        uid = str(uuid.uuid4())
+        hashed_pwd = get_password_hash(input_data.password)
 
-    user_doc = {
-        "_id": uid,
-        "uid": uid,
-        "email": clean_email,
-        "hashedPassword": hashed_pwd,
-        "username": clean_username,
-        "usernameLower": username_lower,
-        "displayName": clean_username,
-        "avatarIcon": input_data.avatarIcon or "person",
-        "avatarGradient": input_data.avatarGradient or ["#8B5CF6", "#06B6D4"],
-        "themeColor": input_data.themeColor or "#8B5CF6",
-        "bio": input_data.bio or "",
-        "reputationScore": 100,
-        "anonymityLevel": 100,
-        "followersCount": 0,
-        "followingCount": 0,
-        "postsCount": 0,
-        "joinedAt": datetime.utcnow().isoformat(),
-        "createdAt": datetime.utcnow()
-    }
+        user_doc = {
+            "_id": uid,
+            "uid": uid,
+            "email": clean_email,
+            "hashedPassword": hashed_pwd,
+            "username": clean_username,
+            "usernameLower": username_lower,
+            "displayName": clean_username,
+            "avatarIcon": input_data.avatarIcon or "person",
+            "avatarGradient": input_data.avatarGradient or ["#8B5CF6", "#06B6D4"],
+            "themeColor": input_data.themeColor or "#8B5CF6",
+            "bio": input_data.bio or "",
+            "reputationScore": 100,
+            "anonymityLevel": 100,
+            "followersCount": 0,
+            "followingCount": 0,
+            "postsCount": 0,
+            "joinedAt": datetime.utcnow().isoformat(),
+            "createdAt": datetime.utcnow()
+        }
 
-    await db.users.insert_one(user_doc)
+        await db.users.insert_one(user_doc)
 
-    token = create_access_token({"sub": uid, "username": clean_username})
-    safe_user = {k: v for k, v in user_doc.items() if k not in ["hashedPassword", "_id", "createdAt"]}
+        token = create_access_token({"sub": uid, "username": clean_username})
+        safe_user = {k: v for k, v in user_doc.items() if k not in ["hashedPassword", "_id", "createdAt"]}
 
-    return TokenResponse(access_token=token, user=safe_user)
+        return TokenResponse(access_token=token, user=safe_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
 
 @router.post("/login", response_model=TokenResponse)
 async def login(input_data: UserLogin):
