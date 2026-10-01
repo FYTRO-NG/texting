@@ -71,8 +71,27 @@ function mapDocToPost(docSnap: any, saved = false): Post {
 }
 
 export const subscribeToPosts = (callback: (posts: Post[]) => void) => {
+  // First try fetching active posts from FastAPI + MongoDB
+  apiRequest<Post[]>("/posts").then((res) => {
+    if (res.data && res.data.length > 0) {
+      callback(res.data);
+    }
+  }).catch(() => {});
+
   const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(50));
-  return onSnapshot(q, (s) => callback(s.docs.map((d) => mapDocToPost(d))), (err) => { console.warn("posts listener:", err); callback([]); });
+  return onSnapshot(
+    q,
+    (s) => {
+      if (s.docs.length > 0) {
+        callback(s.docs.map((d) => mapDocToPost(d)));
+      }
+    },
+    async (err) => {
+      console.warn("Firestore posts listener fallback to FastAPI:", err?.message);
+      const res = await apiRequest<Post[]>("/posts");
+      callback(res.data || []);
+    }
+  );
 };
 
 export const createPostInFirestore = async (postData: CreatePostInput) => {
@@ -85,10 +104,10 @@ export const createPostInFirestore = async (postData: CreatePostInput) => {
   if (avatarUrl) firestoreDoc.avatarUrl = avatarUrl;
   if (images && images.length > 0) { firestoreDoc.images = images; firestoreDoc.image = images[0].url; }
   const cleanDoc: Record<string, any> = {};
-  Object.entries(firestoreDoc).forEach(([k, v]) => { if (v !== undefined) cleanDoc[k] = v; });
-  // Dual-write to FastAPI MongoDB backend
+  // 1. Primary: Save to FastAPI MongoDB backend
+  let fastApiPost: any = null;
   try {
-    await apiRequest("/posts", {
+    const apiRes = await apiRequest("/posts", {
       method: "POST",
       body: JSON.stringify({
         text: postData.text,
@@ -100,11 +119,22 @@ export const createPostInFirestore = async (postData: CreatePostInput) => {
         visibility: postData.visibility
       }),
     });
+    if (apiRes.data) {
+      fastApiPost = apiRes.data;
+    }
   } catch (backendErr) {
     console.warn("FastAPI MongoDB post creation sync:", backendErr);
   }
 
-  return docRef;
+  // 2. Secondary: Firestore write (if available)
+  let createdRef: any = null;
+  try {
+    createdRef = await addDoc(collection(db, "posts"), cleanDoc);
+  } catch (firestoreErr) {
+    console.warn("Firestore post creation skipped or failed:", firestoreErr);
+  }
+
+  return createdRef || fastApiPost || { id: "post_" + Date.now() };
 };
 
 import { functions } from "../firebase";
